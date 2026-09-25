@@ -10,6 +10,7 @@ if (args.includes("--never-listen")) {
   );
   if (Deno.build.os !== "windows") {
     Deno.addSignalListener("SIGTERM", () => {
+      if (args.includes("--report-term")) console.log("SIGTERM received");
       if (!args.includes("--ignore-term")) void server.shutdown();
     });
   }

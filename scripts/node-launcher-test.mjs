@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { cp, mkdir, readFile } from "node:fs/promises";
 import { createServer as createListener } from "node:net";
@@ -18,7 +18,7 @@ const { createServer } = await import("../dist/npm-launcher/src/api.js");
 const { spawnServer } = await import("../dist/npm-launcher/src/process.js");
 const cli = resolve("dist/npm-launcher/cli.js");
 
-function launch(args) {
+function launch(args, options = {}) {
   return spawn(process.execPath, [cli, ...args], {
     env: {
       ...process.env,
@@ -26,6 +26,7 @@ function launch(args) {
       BOT_API_TEST_VALUE: "inherited",
     },
     stdio: ["ignore", "pipe", "pipe"],
+    ...options,
   });
 }
 
@@ -74,6 +75,31 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     }
   });
 }
+
+test("Node CLI delivers terminal Ctrl+C to the server once", {
+  skip: process.platform === "win32",
+  timeout: 10_000,
+}, async () => {
+  // A terminal signals its whole foreground process group; model that group.
+  const child = launch([
+    "-e",
+    'process.on("SIGINT",()=>{console.log("graceful");setTimeout(()=>process.exit(0),100)});console.log(process.pid);setInterval(()=>{},1000)',
+  ], { detached: true });
+  let server;
+  try {
+    server = Number(String((await once(child.stdout, "data"))[0]).trim());
+    const group = execFileSync("ps", ["-o", "pgid=", "-p", String(server)]);
+    assert.notEqual(Number(String(group).trim()), child.pid);
+    process.kill(-child.pid, "SIGINT");
+    assert.equal((await once(child, "close"))[0], 0);
+  } finally {
+    for (const pid of [-child.pid, server]) {
+      try {
+        if (pid) process.kill(pid, "SIGKILL");
+      } catch { /* Already exited. */ }
+    }
+  }
+});
 
 test(
   "Node API readiness and forced shutdown",
