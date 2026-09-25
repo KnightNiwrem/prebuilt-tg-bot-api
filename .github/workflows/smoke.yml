@@ -46,6 +46,20 @@ jobs:
           path: artifacts
       - name: Assemble local npm packages
         run: deno run -A scripts/assemble.ts
+      - name: Check Windows static dependency linkage
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dumpbin) { throw 'Cannot locate dumpbin for dependency validation' }
+          $dependencies = & $dumpbin /dependents artifacts/native-win32-x64/telegram-bot-api.exe
+          if ($LASTEXITCODE) { throw 'Cannot inspect executable imports' }
+          $dependencies | Write-Output
+          if ($dependencies -match '(?i)(vcruntime|msvcp|libssl|libcrypto|zlib).*\.dll') {
+            throw 'Native server unexpectedly requires a redistributable runtime or shared OpenSSL/zlib'
+          }
       - name: Test installed npm and Deno launchers, then compile
         env:
           BOT_API_TEST_TARGET: ${{ matrix.target }}
