@@ -13,6 +13,7 @@
     }
   },
   "files": [
+    "LICENSE",
     "index.js",
     "index.d.ts"
   ],
