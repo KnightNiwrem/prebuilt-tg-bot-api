@@ -54,9 +54,14 @@ instead of guessing. Deno may download both Linux variants for its CPU. No
   Preserve the two package names and correct host constraints even though both
   are built with musl. Native arm64 runners avoid cross-toolchain complexity.
 - **macOS:** link OpenSSL/zlib statically; keep the system C/C++ frameworks.
-  Target macOS 13+. Ad-hoc signing provides a valid code signature, not
-  notarization or automatic quarantine removal. Document the xattr fallback
-  honestly.
+  Target macOS 15+, matching the native CI runners and Homebrew bottles. The
+  initial 13.0 deployment flag did not make the prebuilt dependency objects
+  compatible with macOS 13: the linker warned that they targeted macOS 15.
+  Raising the declared minimum corrects that unsupported compatibility claim.
+  Reject such linker warnings in future builds; older OS support would require
+  compatible dependency builds and tests on the older OS. Ad-hoc signing
+  provides a valid code signature, not notarization or automatic quarantine
+  removal. Document the xattr fallback honestly.
 - **Windows:** upstream explicitly documents MSVC/vcpkg builds. Keep x64 in the
   build and smoke matrix; success is required before publication. Use static
   vcpkg dependencies and terminate the child for supported console shutdown

@@ -120,14 +120,17 @@ reuses the existing binary packages; no native rebuild is needed.
 
 Linux uses native x64/arm64 runners and Alpine 3.22 with static OpenSSL, zlib,
 musl, and compiler runtimes. The same strategy serves glibc and musl host
-packages. macOS uses native Intel/Apple Silicon runners, static Homebrew
-OpenSSL/zlib, system libraries, and ad-hoc code signing. Windows uses MSVC and
-vcpkg static dependencies. The upstream source and submodule commits are pinned.
-Runner images, distribution package revisions, Homebrew, and the runner's vcpkg
-baseline can evolve; these are repeatable CI recipes, not a claim of
-byte-for-byte reproducibility. Save build logs, package versions, and artifacts
-with each release. Use a rebuild version if those environments change the
-shipped bytes.
+packages. macOS targets 15+ on native Intel/Apple Silicon macOS 15 runners, with
+static Homebrew OpenSSL/zlib, system libraries, and ad-hoc code signing. The
+build rejects linker warnings about dependencies built for a newer macOS than
+the deployment target. Supporting an older macOS requires rebuilding compatible
+dependencies and testing on that OS, not just lowering the deployment flag.
+Windows uses MSVC and vcpkg static dependencies. The upstream source and
+submodule commits are pinned. Runner images, distribution package revisions,
+Homebrew, and the runner's vcpkg baseline can evolve; these are repeatable CI
+recipes, not a claim of byte-for-byte reproducibility. Save build logs, package
+versions, and artifacts with each release. Use a rebuild version if those
+environments change the shipped bytes.
 
 Smoke tests require exit code zero and upstream help text on its original output
 stream (upstream's logging may write help to stderr). With credentials, the API

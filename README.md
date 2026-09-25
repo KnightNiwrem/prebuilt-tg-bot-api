@@ -105,8 +105,8 @@ All packages are under `@deerdaily/` and contain `bin/telegram-bot-api` (or
 | `bot-api-linux-arm64`      | Linux arm64, glibc host | `aarch64-unknown-linux-gnu` |
 | `bot-api-linux-x64-musl`   | Alpine / musl x64       | Not provided by Deno        |
 | `bot-api-linux-arm64-musl` | Alpine / musl arm64     | Not provided by Deno        |
-| `bot-api-darwin-x64`       | macOS 13+ Intel         | `x86_64-apple-darwin`       |
-| `bot-api-darwin-arm64`     | macOS 13+ Apple Silicon | `aarch64-apple-darwin`      |
+| `bot-api-darwin-x64`       | macOS 15+ Intel         | `x86_64-apple-darwin`       |
+| `bot-api-darwin-arm64`     | macOS 15+ Apple Silicon | `aarch64-apple-darwin`      |
 | `bot-api-win32-x64`        | Windows x64             | `x86_64-pc-windows-msvc`    |
 
 Linux servers use fully static musl builds even in packages selected on glibc
@@ -115,6 +115,13 @@ runtime still has its own OS requirements. OpenSSL and zlib are static on macOS
 and Windows; system OS libraries remain necessary. Windows arm64 and other
 targets report an explicit unsupported-target error; use a custom binary via the
 override.
+
+The macOS minimum is 15, matching the native runners and Homebrew dependency
+bottles used in CI. Lowering the executable's deployment target alone does not
+make those dependencies compatible with an older OS. CI rejects linker warnings
+about dependencies targeting a newer macOS version. macOS 13 and 14 are not
+supported by these prebuilt packages; use a compatible custom build via the
+override if needed.
 
 Alpine is tested with native Node. Deno currently publishes GNU/Linux compile
 targets, not musl targets; a standalone Deno launcher is therefore not

@@ -2,13 +2,20 @@
 set -euo pipefail
 test "${CI:-}" = true || { echo 'Native builds are CI-only' >&2; exit 1; }
 brew install gperf openssl@3 zlib ninja
-export MACOSX_DEPLOYMENT_TARGET=13.0
+# Homebrew's bottles on the macOS 15 runners also target macOS 15. Setting an
+# older target here does not rebuild those static dependencies for the older OS.
+export MACOSX_DEPLOYMENT_TARGET=15.0
 cmake -S upstream -B "$RUNNER_TEMP/bot-api-build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DOPENSSL_USE_STATIC_LIBS=TRUE \
   -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" \
   -DZLIB_LIBRARY="$(brew --prefix zlib)/lib/libz.a" \
   -DZLIB_INCLUDE_DIR="$(brew --prefix zlib)/include"
-cmake --build "$RUNNER_TEMP/bot-api-build" --target telegram-bot-api --parallel 3
+build_log="$RUNNER_TEMP/bot-api-build.log"
+cmake --build "$RUNNER_TEMP/bot-api-build" --target telegram-bot-api --parallel 3 2>&1 | tee "$build_log"
+if grep -E 'was built for newer .* than being linked' "$build_log"; then
+  echo 'A dependency exceeds the macOS deployment target; rebuild it or review the supported OS baseline.' >&2
+  exit 1
+fi
 mkdir -p dist
 brew list --versions > dist/build-environment.txt
 cp "$RUNNER_TEMP/bot-api-build/telegram-bot-api" dist/telegram-bot-api
