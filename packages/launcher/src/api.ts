@@ -21,7 +21,8 @@ export interface BotApiOptions {
 
 /** Handle to one server process. */
 export interface BotApiServer {
-  readonly pid: number;
+  /** Undefined only when the operating system could not start the process. */
+  readonly pid: number | undefined;
   /** Resolves once the configured TCP listener accepts a connection. */
   ready(): Promise<void>;
   /** Terminates the child, escalating to SIGKILL after the grace period. */
@@ -67,7 +68,10 @@ function probe(
   });
 }
 
-/** Start the native server with inherited stdio and environment. */
+/**
+ * Start the native server with inherited stdio and environment. The process's
+ * own signal handling is left alone: call `stop()` from your shutdown path.
+ */
 export function startBotApiServer(options: BotApiOptions): BotApiServer {
   return createServer(options, spawnServer);
 }
@@ -95,9 +99,7 @@ export function createServer(
   const controller = new AbortController();
   let exitError: Error | undefined;
   void running.exited.then((code) => {
-    exitError = new Error(
-      `Telegram Bot API exited before readiness (code ${code})`,
-    );
+    exitError = new Error(`Telegram Bot API exited with code ${code}`);
     controller.abort();
   }, (error) => {
     exitError = error;
@@ -106,7 +108,7 @@ export function createServer(
   let readiness: Promise<void> | undefined;
   return {
     get pid() {
-      return running.child.pid ?? 0;
+      return running.child.pid;
     },
     ready() {
       return readiness ??= (async () => {

@@ -1,12 +1,30 @@
 #!/usr/bin/env -S deno run -N -R -W --allow-run --allow-env
 /** Passthrough command-line entrypoint. For the API, import @deerdaily/bot-api/api. @module */
+import { realpathSync } from "node:fs";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { spawnServer } from "./src/process.ts";
 
-try {
-  const args = typeof Deno !== "undefined" ? Deno.args : process.argv.slice(2);
-  process.exitCode = await spawnServer(args).exited;
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+function isMain(): boolean {
+  if (typeof import.meta.main === "boolean") return import.meta.main;
+  // Node before 24.2 lacks import.meta.main; npm's bin shim links to this file.
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+// Importing the package root must not start a server.
+if (isMain()) {
+  try {
+    const args = typeof Deno !== "undefined"
+      ? Deno.args
+      : process.argv.slice(2);
+    process.exitCode = await spawnServer(args, { forwardSignals: true })
+      .exited;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }

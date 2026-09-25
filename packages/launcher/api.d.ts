@@ -12,7 +12,7 @@ export interface BotApiOptions {
   stopTimeoutMs?: number;
 }
 export interface BotApiServer {
-  readonly pid: number;
+  readonly pid: number | undefined;
   ready(): Promise<void>;
   stop(): Promise<void>;
 }

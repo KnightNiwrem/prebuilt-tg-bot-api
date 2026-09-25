@@ -3,18 +3,71 @@ import { constants } from "node:os";
 import process from "node:process";
 import { resolveBinary } from "./binary.ts";
 
+type Signal =
+  | "SIGINT"
+  | "SIGTERM"
+  | "SIGQUIT"
+  | "SIGHUP"
+  | "SIGUSR1"
+  | "SIGUSR2"
+  | "SIGBREAK"
+  | "SIGKILL";
+
+export interface SpawnOptions {
+  /**
+   * Relay the launcher's signals to the server. Only the CLI owns its process's
+   * signals; an application embedding the API keeps its own signal behavior.
+   */
+  forwardSignals?: boolean;
+}
+
 export interface RunningProcess {
   child: { pid: number | undefined };
   exited: Promise<number>;
   stop(timeoutMs?: number): Promise<void>;
 }
 
+const windows = process.platform === "win32";
+// Every signal upstream handles on POSIX: quit (INT/TERM/QUIT), log reopening
+// (USR1/USR2), and HUP, which it deliberately ignores.
+const relayed = [
+  "SIGINT",
+  "SIGTERM",
+  "SIGQUIT",
+  "SIGHUP",
+  "SIGUSR1",
+  "SIGUSR2",
+] as const;
+// Windows console events reach every process attached to the console.
+const consoleEvents = ["SIGINT", "SIGBREAK"] as const;
+const consoleGraceMs = 5_000;
+
 /** Shared lifecycle; use each runtime's native process and signal primitives. */
-export function spawnServer(args: readonly string[]): RunningProcess {
+export function spawnServer(
+  args: readonly string[],
+  options: SpawnOptions = {},
+): RunningProcess {
+  const forward = options.forwardSignals ?? false;
+  // A terminal sends Ctrl+C to its whole foreground process group, and upstream
+  // treats a second quit signal as "exit immediately". Run the server in its own
+  // session so the relay below delivers each signal exactly once.
+  const detached = forward && !windows;
   const binary = resolveBinary();
+  const cleanup = () => {
+    try {
+      binary.cleanup();
+    } catch (error) {
+      // A leftover temporary copy must not replace the server's exit status.
+      console.error(
+        `Warning: could not remove the temporary server copy: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  };
   let pid: number | undefined;
   let wait: Promise<number>;
-  let kill: (signal: "SIGINT" | "SIGTERM" | "SIGKILL" | "SIGBREAK") => void;
+  let kill: (signal: Signal) => void;
   const deno = typeof Deno !== "undefined";
   try {
     if (deno) {
@@ -23,6 +76,7 @@ export function spawnServer(args: readonly string[]): RunningProcess {
         stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
+        detached,
       }).spawn();
       pid = child.pid;
       wait = child.status.then((status) => status.code);
@@ -31,6 +85,7 @@ export function spawnServer(args: readonly string[]): RunningProcess {
       const child = spawn(binary.path, [...args], {
         stdio: "inherit",
         shell: false,
+        detached,
       });
       pid = child.pid;
       wait = new Promise((resolve, reject) => {
@@ -48,7 +103,7 @@ export function spawnServer(args: readonly string[]): RunningProcess {
       };
     }
   } catch (error) {
-    binary.cleanup();
+    cleanup();
     throw new Error(
       `Unable to start Telegram Bot API: ${
         error instanceof Error ? error.message : error
@@ -58,12 +113,13 @@ export function spawnServer(args: readonly string[]): RunningProcess {
   }
   let settled = false;
   let shutdown: Promise<void> | undefined;
-  const signalChild = (
-    signal: "SIGINT" | "SIGTERM" | "SIGKILL" | "SIGBREAK",
-  ) => {
+  let forceTimer: ReturnType<typeof setTimeout> | undefined;
+  const signalChild = (signal: Signal) => {
     if (settled) return;
     try {
-      kill(process.platform === "win32" ? "SIGKILL" : signal);
+      // Windows has no deliverable termination signals; both runtimes map
+      // SIGKILL to TerminateProcess.
+      kill(windows ? "SIGKILL" : signal);
     } catch (error) {
       // The child can exit between checking its status and sending the signal.
       if (
@@ -72,30 +128,43 @@ export function spawnServer(args: readonly string[]): RunningProcess {
       ) throw error;
     }
   };
-  const handlers: Array<["SIGINT" | "SIGTERM" | "SIGBREAK", () => void]> = [];
-  const signals = process.platform === "win32"
-    ? ["SIGINT", "SIGBREAK"] as const
-    : ["SIGINT", "SIGTERM"] as const;
-  for (const signal of signals) {
-    const handler = () => signalChild(signal);
-    handlers.push([signal, handler]);
-    if (deno) Deno.addSignalListener(signal, handler);
-    else process.on(signal, handler);
+  const listeners: Array<[Signal, () => void]> = [];
+  if (forward && windows) {
+    // The console already delivered Ctrl+C/Ctrl+Break to the server. Let it
+    // shut down by itself; terminate it only if it outlives the grace period.
+    for (const signal of consoleEvents) {
+      listeners.push([signal, () => {
+        forceTimer ??= setTimeout(() => signalChild("SIGKILL"), consoleGraceMs);
+      }]);
+    }
+  } else if (forward) {
+    for (const signal of relayed) {
+      listeners.push([signal, () => signalChild(signal)]);
+    }
   }
-  const onExit = () => signalChild("SIGKILL");
-  process.on("exit", onExit);
+  for (const [signal, listener] of listeners) {
+    if (deno) Deno.addSignalListener(signal, listener);
+    else process.on(signal, listener);
+  }
+  // If the host exits first, ask the server to shut down gracefully by itself.
+  // Deno.exit() fires only "unload", not Node's "exit" event.
+  const onExit = () => signalChild("SIGTERM");
+  if (deno) globalThis.addEventListener("unload", onExit);
+  else process.on("exit", onExit);
   const exited = wait.catch((error: Error) => {
     throw new Error(`Unable to start Telegram Bot API: ${error.message}`, {
       cause: error,
     });
   }).finally(() => {
     settled = true;
-    for (const [signal, handler] of handlers) {
-      if (deno) Deno.removeSignalListener(signal, handler);
-      else process.off(signal, handler);
+    clearTimeout(forceTimer);
+    for (const [signal, listener] of listeners) {
+      if (deno) Deno.removeSignalListener(signal, listener);
+      else process.off(signal, listener);
     }
-    process.off("exit", onExit);
-    binary.cleanup();
+    if (deno) globalThis.removeEventListener("unload", onExit);
+    else process.off("exit", onExit);
+    cleanup();
   });
   void exited.catch(() => {});
   return {

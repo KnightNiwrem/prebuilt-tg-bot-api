@@ -21,7 +21,14 @@ export function resolveBinary(): Binary {
   // The OS cannot execute a file inside Deno's virtual filesystem. Materialize
   // the already embedded bytes for this process only; this is not a cache.
   const directory = mkdtempSync(join(tmpdir(), "telegram-bot-api-"));
-  const cleanup = () => rmSync(directory, { recursive: true, force: true });
+  // Retries cover Windows briefly locking a just-exited executable.
+  const cleanup = () =>
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   try {
     const executable = join(directory, basename(path));
     copyFileSync(path, executable);
