@@ -41,9 +41,10 @@ npm resolution. See the exact source links in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#deno-optional-dependency-verification).
 The resolver checks Node's runtime report first, so a glibc host with musl also
 installed still selects the package npm installed. Deno checks ldd before
-musl/glibc loader files and avoids the permission-sensitive report. Unknown libc
-fails clearly instead of guessing. Deno may download both Linux variants for its
-CPU. No `--allow-sys` permission or shell probe is required.
+musl/glibc loader files and avoids the permission-sensitive report. If libc
+cannot be determined, any installed Linux variant is used: both carry the same
+static server. Deno may download both Linux variants for its CPU. No
+`--allow-sys` permission or shell probe is required.
 
 ## Platform choices and deviations from the initial brief
 
@@ -52,8 +53,9 @@ CPU. No `--allow-sys` permission or shell probe is required.
   and not moving `master`. Watch numeric tags when available, otherwise CMake
   version changes. Same-version rebuilds require `-build.N`.
 - **Linux:** fully static musl servers work on both glibc and musl hosts.
-  Preserve the two package names and correct host constraints even though both
-  are built with musl. Native arm64 runners avoid cross-toolchain complexity.
+  Preserve the two package names and correct host constraints, but build once
+  per CPU and ship the same static binary in both. Native arm64 runners avoid
+  cross-toolchain complexity.
 - **macOS:** link OpenSSL/zlib statically; keep the system C/C++ frameworks.
   Target macOS 15+, matching the native CI runners and Homebrew bottles. The
   initial 13.0 deployment flag did not make the prebuilt dependency objects

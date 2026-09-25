@@ -27,8 +27,13 @@ server's options, or consult the
 [upstream usage guide](https://github.com/tdlib/telegram-bot-api#usage).
 
 The CLI forwards arguments unchanged, inherits stdin/stdout/stderr and the
-environment, forwards SIGINT/SIGTERM, and returns the server's exit code.
-Windows uses forced process termination on supported console shutdown signals.
+environment, and returns the server's exit code. On Linux and macOS the server
+runs in its own process group and the launcher relays each signal exactly once
+(SIGINT, SIGTERM, SIGQUIT, SIGHUP, SIGUSR1, SIGUSR2), so Ctrl+C starts
+upstream's graceful shutdown and a second Ctrl+C forces an immediate exit, just
+as when running the server directly. On Windows, the console delivers Ctrl+C to
+the server itself; the launcher terminates it only if it is still running five
+seconds later.
 
 ## Programmatic API
 
@@ -62,8 +67,14 @@ is `8081`.
 `ready()` checks TCP acceptance, not Telegram authentication or application
 health; an already occupied port can satisfy that check. Avoid overriding host
 or port through `args`, since readiness uses the named options. `stop()` is
-idempotent and escalates to SIGKILL. A readiness timeout leaves shutdown to the
-caller; always use `finally`.
+idempotent and escalates to SIGKILL; on Windows it terminates immediately. A
+readiness timeout leaves shutdown to the caller; always use `finally`.
+
+The API does not install signal handlers, so your application keeps its own
+SIGINT/SIGTERM behavior. Call `stop()` from your shutdown path. If your
+application exits without doing so, the server is sent SIGTERM and finishes
+shutting down by itself. `pid` is `undefined` only if the process could not be
+started.
 
 ## Supported platforms
 
@@ -119,8 +130,11 @@ deno compile --target x86_64-unknown-linux-gnu -N -R -W --allow-run --allow-env 
 ./bot-api --help
 ```
 
-Use a target from the platform table. Keep the default compilation mode:
-`--bundle` and `--exclude-unused-npm` can discard packages reached through
+Use a target from the platform table and compile on that platform: CI verifies
+each target by compiling on its own OS and CPU. Cross-compiling for another
+platform is unverified, because the embedded package must match the target
+rather than the machine running `deno compile`. Keep the default compilation
+mode: `--bundle` and `--exclude-unused-npm` can discard packages reached through
 dynamic resolution. No network connection is needed to start the embedded
 server; the server may need network access for its own work.
 
@@ -159,12 +173,12 @@ network traffic.
 
 ## Deployment considerations
 
-- **HTTPS trust:** clean-machine certificate trust is not yet verified. The
-  macOS build uses Homebrew OpenSSL certificate paths; minimal images and
-  private CAs need appropriate roots. Do not assume `SSL_CERT_FILE` redirects
-  the pinned TDLib certificate loader, or disable certificate verification to
-  work around missing roots. Windows uses its OS certificate store. Successful
-  startup does not prove HTTPS webhooks work.
+- **HTTPS trust:** the server loads CA roots from fixed system locations:
+  `/etc/ssl/cert.pem` and `/etc/ssl/certs` on Linux and macOS, and the OS
+  certificate store on Windows. Minimal images and private CAs need roots
+  installed there. Do not assume `SSL_CERT_FILE` redirects the pinned TDLib
+  certificate loader, or disable certificate verification to work around missing
+  roots. Successful startup does not prove HTTPS webhooks work.
 - **Updates:** statically linked libraries are part of the server binary. OS
   library updates cannot replace them; upgrade the binary package through a
   launcher release and regenerate standalone executables to adopt fixes.
@@ -177,8 +191,8 @@ network traffic.
 
 The launcher and native server are versioned separately. Each launcher release
 pins an exact binary package version; launcher-only updates can reuse cached
-binaries. This checkout uses launcher `0.1.0` and Bot API `10.3.0`. Native
-rebuilds use versions such as `10.3.0-build.N`.
+binaries. Native rebuilds of the same Bot API release use versions such as
+`10.3.0-build.N`. Pass `--version` to print the server's Bot API version.
 
 ## Contributing
 

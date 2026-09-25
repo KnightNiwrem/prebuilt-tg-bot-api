@@ -59,9 +59,10 @@ versions never contain the platform name.
 ## Build and publish binaries
 
 1. Commit and push the reviewed changes. Run `build-binaries.yml` on that
-   commit. It builds all seven targets, then runs Node/Deno smoke tests and five
-   supported Deno compilation targets. Musl packages additionally run under
-   Alpine/Node.
+   commit. It builds five native servers (one static Linux build per CPU serves
+   both libc packages), then runs Node/Deno and HTTP smoke tests for all seven
+   packages and compiles the five supported Deno targets. Musl packages
+   additionally run under Alpine/Node.
 2. Observe with `gh run watch <run-id> --exit-status`; inspect failures with
    `gh run view <run-id> --log-failed`. Native builds are CI-only, including
    dependencies and Deno compiled launchers. Do not install native build tools
@@ -82,7 +83,7 @@ failed, finish the release from the same validated artifacts; never rebuild
 under the old version. Pre-release rebuild packages use npm's `build` dist-tag;
 exact launcher pins are unaffected by tag ordering.
 
-When all seven native jobs succeeded but packaging or smoke tests need fixes,
+When all five native jobs succeeded but packaging or smoke tests need fixes,
 dispatch `build-binaries.yml` with `native_run_id` pointing to that run. It
 checks the same-repository jobs, upstream pin, and native scripts, copies the CI
 artifacts into the new run, and repeats packaging and smoke tests. Changed
@@ -121,16 +122,17 @@ reuses the existing binary packages; no native rebuild is needed.
 Linux uses native x64/arm64 runners and Alpine 3.22 with static OpenSSL, zlib,
 musl, and compiler runtimes. The same strategy serves glibc and musl host
 packages. macOS targets 15+ on native Intel/Apple Silicon macOS 15 runners, with
-static Homebrew OpenSSL/zlib, system libraries, and ad-hoc code signing. The
-build rejects linker warnings about dependencies built for a newer macOS than
-the deployment target. Supporting an older macOS requires rebuilding compatible
-dependencies and testing on that OS, not just lowering the deployment flag.
-Windows uses MSVC and vcpkg static dependencies. The upstream source and
-submodule commits are pinned. Runner images, distribution package revisions,
-Homebrew, and the runner's vcpkg baseline can evolve; these are repeatable CI
-recipes, not a claim of byte-for-byte reproducibility. Save build logs, package
-versions, and artifacts with each release. Use a rebuild version if those
-environments change the shipped bytes.
+static OpenSSL (pinned source release, system CA paths) and Homebrew zlib,
+system libraries, and ad-hoc code signing. The build rejects linker warnings
+about dependencies built for a newer macOS than the deployment target.
+Supporting an older macOS requires rebuilding compatible dependencies and
+testing on that OS, not just lowering the deployment flag. Windows uses MSVC and
+vcpkg static dependencies. The upstream source and submodule commits are pinned.
+Runner images, distribution package revisions, Homebrew, and the runner's vcpkg
+baseline can evolve; these are repeatable CI recipes, not a claim of
+byte-for-byte reproducibility. Save build logs, package versions, and artifacts
+with each release. Use a rebuild version if those environments change the
+shipped bytes.
 
 Smoke tests require exit code zero and upstream help text on its original output
 stream (upstream's logging may write help to stderr). With credentials, the API
