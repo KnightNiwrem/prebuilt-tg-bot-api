@@ -58,29 +58,47 @@ export function targetFor(platform, arch, libc) {
   );
 }
 
+/** Package suffixes to try, most specific first. */
+function candidateTargets() {
+  if (process.platform !== "linux") {
+    return [targetFor(process.platform, process.arch)];
+  }
+  let libc;
+  try {
+    libc = detectLibc();
+  } catch {
+    // Both Linux packages ship the same fully static server, so any installed
+    // variant works when the host's libc cannot be determined.
+  }
+  return (libc ? [libc] : ["glibc", "musl"]).map((variant) =>
+    targetFor("linux", process.arch, variant)
+  );
+}
+
 /** Resolve the installed optional package. Never downloads or runs install scripts. */
 export function resolveBinaryPath() {
-  const target = targetFor(
-    process.platform,
-    process.arch,
-    process.platform === "linux" ? detectLibc() : undefined,
+  const names = candidateTargets().map((target) =>
+    `@deerdaily/bot-api-${target}`
   );
-  const name = `@deerdaily/bot-api-${target}`;
-  try {
-    const entry = require.resolve(name);
-    const binary = join(
-      dirname(entry),
-      "bin",
-      process.platform === "win32"
-        ? "telegram-bot-api.exe"
-        : "telegram-bot-api",
-    );
-    if (!existsSync(binary)) throw new Error(`Missing executable: ${binary}`);
-    return binary;
-  } catch (cause) {
-    throw new Error(
-      `Cannot resolve ${name}. Install optional dependencies (do not use --omit=optional), or set TELEGRAM_BOT_API_BINARY.`,
-      { cause },
-    );
+  const executable = process.platform === "win32"
+    ? "telegram-bot-api.exe"
+    : "telegram-bot-api";
+  const failures = [];
+  for (const name of names) {
+    try {
+      const binary = join(dirname(require.resolve(name)), "bin", executable);
+      if (!existsSync(binary)) throw new Error(`Missing executable: ${binary}`);
+      return binary;
+    } catch (cause) {
+      failures.push(cause);
+    }
   }
+  throw new Error(
+    `Cannot resolve ${
+      names.join(" or ")
+    }. Install optional dependencies (do not use --omit=optional), or set TELEGRAM_BOT_API_BINARY.`,
+    {
+      cause: failures.length === 1 ? failures[0] : new AggregateError(failures),
+    },
+  );
 }
