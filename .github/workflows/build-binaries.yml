@@ -1,6 +1,11 @@
 name: Build binaries
 on:
   workflow_dispatch:
+    inputs:
+      native_run_id:
+        description: Optional previous run with seven successful native jobs and unchanged native scripts
+        required: false
+        type: string
   workflow_call:
   push:
     paths:
@@ -9,8 +14,48 @@ on:
       - .github/workflows/build-binaries.yml
 permissions:
   contents: read
+  actions: read
 jobs:
+  verify-reuse:
+    if: inputs.native_run_id != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+        run: deno run -A scripts/verify-reuse.ts "$NATIVE_RUN_ID"
+  reuse:
+    needs: verify-reuse
+    strategy:
+      matrix:
+        target: [
+          linux-x64,
+          linux-x64-musl,
+          linux-arm64,
+          linux-arm64-musl,
+          darwin-x64,
+          darwin-arm64,
+          win32-x64,
+        ]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: dist
+          run-id: ${{ inputs.native_run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
   build:
+    if: inputs.native_run_id == ''
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -68,6 +113,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   smoke:
-    needs: build
+    needs: [build, reuse]
+    if: ${{ always() && (needs.build.result == 'success' || needs.reuse.result == 'success') }}
     uses: ./.github/workflows/smoke.yml
     secrets: inherit

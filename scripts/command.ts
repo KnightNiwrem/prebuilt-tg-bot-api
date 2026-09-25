@@ -1,4 +1,8 @@
-/** CI helper; npm's Windows shim requires cmd.exe. Only trusted build args enter here. */
+import { dirname, join } from "node:path";
+
+let windowsNpm: string | undefined;
+
+/** CI helper; run npm's JavaScript entrypoint directly on Windows, without a shell. */
 export async function command(
   program: string,
   args: string[],
@@ -7,11 +11,23 @@ export async function command(
   let executable = program;
   let argv = args;
   if (program === "npm" && Deno.build.os === "windows") {
-    if (args.some((arg) => /["%\r\n]/.test(arg))) {
-      throw new Error("Unsafe npm shim argument");
+    if (!windowsNpm) {
+      const node = await new Deno.Command("node", {
+        args: ["-p", "process.execPath"],
+        stdout: "piped",
+      }).output();
+      if (!node.success) throw new Error("Cannot locate the Node installation");
+      windowsNpm = join(
+        dirname(new TextDecoder().decode(node.stdout).trim()),
+        "node_modules",
+        "npm",
+        "bin",
+        "npm-cli.js",
+      );
+      await Deno.stat(windowsNpm);
     }
-    executable = "cmd.exe";
-    argv = ["/d", "/s", "/c", `npm ${args.map((arg) => `"${arg}"`).join(" ")}`];
+    executable = "node";
+    argv = [windowsNpm, ...args];
   }
   const result = await new Deno.Command(executable, {
     ...options,

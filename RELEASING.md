@@ -82,6 +82,12 @@ failed, finish the release from the same validated artifacts; never rebuild
 under the old version. Pre-release rebuild packages use npm's `build` dist-tag;
 exact launcher pins are unaffected by tag ordering.
 
+When all seven native jobs succeeded but packaging or smoke tests need fixes,
+dispatch `build-binaries.yml` with `native_run_id` pointing to that run. It
+checks the same-repository jobs, upstream pin, and native scripts, copies the CI
+artifacts into the new run, and repeats packaging and smoke tests. Changed
+native scripts or source pins require a fresh native build.
+
 ## Publish the launcher
 
 After the binary packages exist publicly, resolve them into the real lockfile:
