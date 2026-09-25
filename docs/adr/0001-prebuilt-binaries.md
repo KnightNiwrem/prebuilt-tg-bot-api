@@ -37,12 +37,13 @@ persistent cache. Extraction requires write permission and an executable temp
 filesystem. Forced OS termination can prevent cleanup.
 
 Deno 2.9.6 filters optional packages by OS and CPU but does not model `libc` in
-npm resolution. See the exact source links in README.md. The resolver checks
-Node's runtime report first, so a glibc host with musl also installed still
-selects the package npm installed. Deno checks ldd before musl/glibc loader
-files and avoids the permission-sensitive report. Unknown libc fails clearly
-instead of guessing. Deno may download both Linux variants for its CPU. No
-`--allow-sys` permission or shell probe is required.
+npm resolution. See the exact source links in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#deno-optional-dependency-verification).
+The resolver checks Node's runtime report first, so a glibc host with musl also
+installed still selects the package npm installed. Deno checks ldd before
+musl/glibc loader files and avoids the permission-sensitive report. Unknown libc
+fails clearly instead of guessing. Deno may download both Linux variants for its
+CPU. No `--allow-sys` permission or shell probe is required.
 
 ## Platform choices and deviations from the initial brief
 

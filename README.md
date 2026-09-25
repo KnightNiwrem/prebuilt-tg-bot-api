@@ -1,13 +1,12 @@
 # Telegram Bot API, without a C++ toolchain
 
-A small Deno/Node launcher for the unmodified
-[official Telegram Bot API server](https://github.com/tdlib/telegram-bot-api).
-Native binaries are built in GitHub Actions and distributed as platform-specific
-npm packages. The TypeScript launcher is published independently to JSR and npm.
+Run the unmodified
+[official Telegram Bot API server](https://github.com/tdlib/telegram-bot-api)
+with Deno or Node. The launcher selects a prebuilt native binary for your
+platform and lets you run it from the command line or manage it from TypeScript.
 
-**Release status:** package namespaces and initial publication are maintainer
-setup tasks. The public commands below become available after that first
-release. Development and CI use the same source with local package resolution.
+The first public package release is pending. The registry commands below become
+available after publication.
 
 ## Run
 
@@ -20,35 +19,16 @@ deno run -N -R -W --allow-run --allow-env jsr:@deerdaily/bot-api --api-id ... --
 With Node 22 or newer:
 
 ```sh
-npx @deerdaily/bot-api --help
+npx @deerdaily/bot-api --api-id ... --api-hash ... --local
 ```
 
+Replace `...` with your Telegram API ID and hash. Pass `--help` to see the
+server's options, or consult the
+[upstream usage guide](https://github.com/tdlib/telegram-bot-api#usage).
+
 The CLI forwards arguments unchanged, inherits stdin/stdout/stderr and the
-environment, forwards SIGINT/SIGTERM, and returns the server's exit code. There
-is no flag parser. See the
-[upstream usage guide](https://github.com/tdlib/telegram-bot-api#usage) or
-invoke `--help` for the server's options. Windows uses forced process
-termination on supported console shutdown signals.
-
-## Permissions and security
-
-The spawned native server runs with your OS account's privileges, **outside
-Deno's permission sandbox**. Restrict the account, filesystem, and network
-through the OS or a container when isolation matters. Deno permission flags do
-not constrain the child process.
-
-| Permission             | Launcher use                                                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `--allow-run`          | Starts and terminates the native server; always required.                                                       |
-| `-R` / `--allow-read`  | Resolves the npm executable, detects Linux libc, and reads embedded bytes in compiled mode.                     |
-| `-W` / `--allow-write` | Compiled mode materializes and removes a temporary executable. Ordinary CLI mode does not write a binary cache. |
-| `--allow-env`          | Reads the binary override and runtime environment.                                                              |
-| `-N` / `--allow-net`   | Programmatic `ready()` connects to the listener. The passthrough CLI itself makes no network requests.          |
-
-Fetching initial JSR/npm modules is managed by Deno, separately from script
-network permissions. The command above grants the complete permission set for
-both modes; it does not sandbox server file access or network traffic. There are
-no install scripts and no custom downloader or persistent binary cache.
+environment, forwards SIGINT/SIGTERM, and returns the server's exit code.
+Windows uses forced process termination on supported console shutdown signals.
 
 ## Programmatic API
 
@@ -72,32 +52,23 @@ try {
 }
 ```
 
-On Node import from `@deerdaily/bot-api/api` instead. Only this API constructs
-arguments. It accepts `host` (default `127.0.0.1`), `tempDir`, extra `args`,
-`readyTimeoutMs` (30 seconds), and `stopTimeoutMs` (5 seconds). `ready()` checks
-TCP acceptance, not Telegram authentication or application health; an already
-occupied port can satisfy that check. Avoid overriding host or port through
-`args`, since readiness uses the named options. `stop()` is idempotent and
-escalates to SIGKILL. A readiness timeout leaves shutdown to the caller; always
-use `finally`.
+On Node, install `@deerdaily/bot-api` with npm and import from
+`@deerdaily/bot-api/api` instead.
 
-## Existing binaries and offline use
+The API also accepts `host` (default `127.0.0.1`), `tempDir`, extra `args`,
+`readyTimeoutMs` (30 seconds), and `stopTimeoutMs` (5 seconds). The default port
+is `8081`.
 
-```sh
-TELEGRAM_BOT_API_BINARY=/opt/telegram-bot-api deno run -R --allow-run --allow-env jsr:@deerdaily/bot-api --help
-```
+`ready()` checks TCP acceptance, not Telegram authentication or application
+health; an already occupied port can satisfy that check. Avoid overriding host
+or port through `args`, since readiness uses the named options. `stop()` is
+idempotent and escalates to SIGKILL. A readiness timeout leaves shutdown to the
+caller; always use `finally`.
 
-The override skips platform detection and executable resolution entirely. It is
-a single executable path, never a shell command. The static npm import remains
-part of the module graph: provision JSR/npm dependencies before going offline,
-use a compiled launcher, or vendor the modules. The override cannot prevent the
-runtime from loading the small imported meta-package and its declared
-dependencies.
+## Supported platforms
 
-## Platforms
-
-All packages are under `@deerdaily/` and contain `bin/telegram-bot-api` (or
-`.exe`).
+The launcher automatically selects a platform package under `@deerdaily/`. Keep
+optional dependencies enabled when installing.
 
 | Package suffix             | Native server           | Standalone Deno target      |
 | -------------------------- | ----------------------- | --------------------------- |
@@ -109,164 +80,114 @@ All packages are under `@deerdaily/` and contain `bin/telegram-bot-api` (or
 | `bot-api-darwin-arm64`     | macOS 15+ Apple Silicon | `aarch64-apple-darwin`      |
 | `bot-api-win32-x64`        | Windows x64             | `x86_64-pc-windows-msvc`    |
 
-Linux servers use fully static musl builds even in packages selected on glibc
-hosts. This avoids a minimum glibc version for the **server**. The Deno/Node
-runtime still has its own OS requirements. OpenSSL and zlib are static on macOS
-and Windows; system OS libraries remain necessary. Windows arm64 and other
-targets report an explicit unsupported-target error; use a custom binary via the
-override.
+Linux servers use fully static musl builds even on glibc hosts, avoiding a
+minimum glibc version for the server. DNS behavior and memory/performance
+characteristics can differ from glibc. The Deno/Node runtime still has its own
+OS requirements. OpenSSL and zlib are static on macOS and Windows; system OS
+libraries remain necessary.
 
-The macOS minimum is 15, matching the native runners and Homebrew dependency
-bottles used in CI. Lowering the executable's deployment target alone does not
-make those dependencies compatible with an older OS. CI rejects linker warnings
-about dependencies targeting a newer macOS version. macOS 13 and 14 are not
-supported by these prebuilt packages; use a compatible custom build via the
-override if needed.
+Use Node on Alpine; standalone Deno launchers are not supported there. Deno
+2.9.6 and 2.9.7 may download both Linux libc variants for your CPU; the launcher
+selects the appropriate package at runtime. The launcher uses the package
+manager's cache, with no install scripts, custom downloader, or persistent
+binary cache of its own.
 
-Alpine is tested with native Node. Deno currently publishes GNU/Linux compile
-targets, not musl targets; a standalone Deno launcher is therefore not
-advertised as Alpine-compatible. See
-[Deno's target list](https://docs.deno.com/runtime/reference/cli/compile/#supported-targets).
+macOS 13/14, Windows arm64, and other unlisted targets are unsupported by these
+packages. Use a compatible custom binary on an unsupported platform.
 
-### Deno optional dependency verification
+## Existing binaries and offline use
 
-Checked against **Deno 2.9.6 and the current 2.9.7 source on 2026-09-25**:
+Set `TELEGRAM_BOT_API_BINARY` to use an existing server executable:
 
-- [`all_system_packages` and `as_valid_serialized_for_system`](https://github.com/denoland/deno/blob/v2.9.6/libs/npm/resolution/snapshot.rs)
-  filter incompatible optional dependencies using OS/CPU system metadata.
-- [`NpmPackageVersionInfo`](https://github.com/denoland/deno/blob/v2.9.6/libs/npm/registry.rs)
-  carries `os` and `cpu`, but no `libc`. The serialized resolver likewise
-  restores OS/CPU only. This Deno release **does not honor npm's `libc`
-  constraint**.
+```sh
+TELEGRAM_BOT_API_BINARY=/opt/telegram-bot-api deno run -R --allow-run --allow-env jsr:@deerdaily/bot-api --help
+```
 
-The same behavior remains in the current
-[2.9.7 resolver](https://github.com/denoland/deno/blob/v2.9.7/libs/npm/resolution/snapshot.rs)
-and
-[registry schema](https://github.com/denoland/deno/blob/v2.9.7/libs/npm/registry.rs).
+The override skips platform detection and executable resolution. It is a single
+executable path, never a shell command, and works with both the CLI and API.
 
-CI also verifies the downloaded tarball set empirically with JavaScript-only npm
-fixtures in `scripts/check-package.ts`: one matching OS/CPU package outside
-Linux, and both matching libc variants on Linux. The same check performs a
-complete JSR publish dry-run without creating public registry entries.
-
-Consequently Deno may fetch both Linux packages for the matching CPU, including
-one extra package on Alpine. The meta-package detects the host libc at runtime
-and selects the right package. Current npm honors the package constraints. Do
-not disable optional dependencies. Deno caches exact `name@version` packages
-globally; npm manages its own content cache and installation tree. The launcher
-does not duplicate either cache.
+The override does not remove the launcher's npm dependency from the module
+graph. Before going offline, provision JSR/npm dependencies, vendor the modules,
+or use a compiled launcher.
 
 ## Standalone executable
 
-Compilation is performed in CI in this repository, one job for each supported
-Deno target. The corresponding command for consumers is:
+Compile a launcher that embeds the server and needs neither Deno nor npm to run:
 
 ```sh
 deno compile --target x86_64-unknown-linux-gnu -N -R -W --allow-run --allow-env --output bot-api jsr:@deerdaily/bot-api
 ./bot-api --help
 ```
 
-Use a target from the table. Keep the default compilation mode: `--bundle` and
-`--exclude-unused-npm` can discard packages reached through dynamic resolution.
-Deno embeds npm dependencies and their assets. Since the OS cannot execute a
-virtual filesystem path, the launcher copies the embedded server into a private
-temporary directory, starts it, and removes it after the child exits. An
-OS-level forced kill can leave that temporary directory behind. A writable,
-executable temporary filesystem is required (`TMPDIR` on Unix, `TEMP` on
-Windows).
+Use a target from the platform table. Keep the default compilation mode:
+`--bundle` and `--exclude-unused-npm` can discard packages reached through
+dynamic resolution. No network connection is needed to start the embedded
+server; the server may need network access for its own work.
 
-The distributed executable needs neither Deno nor npm nor a network connection
-to start its embedded server. The server may need network access for its own
-work. CI tests compiled launchers with the build cache and installed npm tree
-moved out of reach, the test registry shut down, and registry URLs made
-unreachable. Cross-target compilation support is Deno's; the matrix validates
-each target on its native runner.
+The launcher extracts the embedded server into a private temporary directory and
+removes it after the child exits. A writable, executable temporary filesystem is
+required (`TMPDIR` on Unix, `TEMP` on Windows). On `noexec` systems, choose an
+approved location or use an installed custom binary through
+`TELEGRAM_BOT_API_BINARY`. Forced termination or power loss can leave temporary
+files behind; use graceful shutdown and an OS-managed cleanup policy. Do not
+delete a running server's extraction directory.
 
-macOS binaries are ad-hoc signed in CI, not Apple-notarized. If a browser
-download is quarantined, inspect its origin, then use
+macOS binaries are ad-hoc signed, not Apple-notarized. If a browser download is
+quarantined, inspect its origin, then use
 `xattr -d com.apple.quarantine /path/to/bot-api` (or the native server path).
-Ad-hoc signing alone does not remove Gatekeeper quarantine.
+Ad-hoc signing alone does not remove Gatekeeper quarantine, and organizational
+security policy can still block execution.
 
-## Portability safeguards and remaining gotchas
+## Permissions
 
-An unmodified server is not necessarily equivalent to a build against your
-host's libraries. The current CI verifies startup, package selection, supported
-Deno compilation targets, and optional credentialed HTTP responses. Those tests
-do not yet establish clean-machine HTTPS trust, production load behavior, or
-compatibility with every enterprise DNS configuration.
+The spawned native server runs with your OS account's privileges, **outside
+Deno's permission sandbox**. Use an OS account or container with suitable
+filesystem and network restrictions when isolation matters.
 
-The following mitigations are **recommended follow-up work, not implemented
-yet**:
+| Permission             | Launcher use                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--allow-run`          | Starts and terminates the native server; always required.                                                  |
+| `-R` / `--allow-read`  | Resolves the npm executable, detects Linux libc, and reads embedded bytes in compiled mode.                |
+| `-W` / `--allow-write` | Compiled mode creates and removes a temporary executable. Ordinary CLI mode does not write a binary cache. |
+| `--allow-env`          | Reads the binary override and runtime environment.                                                         |
+| `-N` / `--allow-net`   | Programmatic `ready()` connects to the listener. The passthrough CLI itself makes no network requests.     |
 
-1. **Portable HTTPS trust:** build OpenSSL with appropriate system CA paths and
-   test the pinned TDLib TLS code without the build machine's Homebrew files.
-   Test trusted and untrusted certificates; never work around missing roots by
-   disabling verification. The pinned
-   [TDLib certificate loader](https://github.com/tdlib/td/blob/bc9c263e2bfee06aaab41e82db51a103376030bc/tdnet/td/net/SslCtx.cpp)
-   reads OpenSSL's compiled-in paths on Unix. It does not use the usual
-   environment-aware default-path loader, so do not assume `SSL_CERT_FILE`
-   redirects it. Windows uses its OS certificate store.
-2. **Linux hardening and thread stacks:** evaluate static PIE with matching
-   compilation flags, verify the resulting ELF headers and actual randomized
-   loading in CI, and explicitly size/test worker-thread stacks. The current
-   recipe uses `-static`, not `-static-pie`. Neither passing `--help` nor adding
-   a linker flag alone proves all runtime hardening properties.
-3. **Dependency maintenance:** add dependency-only update monitoring and
-   vulnerability review alongside the Bot API version watcher. Record exact
-   dependency inputs and archive inventories with releases. Publish security
-   rebuilds under `-build.N` and advance the launcher's exact binary pin.
-4. **Diagnostics and broader verification:** generate and retain matching debug
-   symbols separately from npm payloads, preserve original release artifacts,
-   and add clean-host TLS, DNS, and sustained-load tests. Pin build inputs where
-   practical; do not describe the current floating package-manager inputs as
-   byte-for-byte reproducible.
+Fetching initial JSR/npm modules is managed by Deno, separately from script
+network permissions. The examples grant the complete permission set for CLI and
+compiled use; these flags do not constrain the native server's file access or
+network traffic.
 
-These reduce risks we control. Some limits still require operator choices or
-external credentials, even after those mitigations:
+## Deployment considerations
 
-| Gotcha                                 | What the project can reduce                                                                                                                          | Remaining limit / operator action                                                                                                                                                                                                                 |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Missing or private CA roots            | Portable defaults and clean-host TLS tests are planned; the current macOS build still uses Homebrew OpenSSL paths.                                   | Minimal images need a maintained CA store. Private trust policies require explicitly provisioned roots; do not disable TLS verification. Startup success is not proof that HTTPS webhooks work.                                                   |
-| Updates to statically linked libraries | Dependency monitoring, reviewed rebuilds, and exact-version releases can shorten response time.                                                      | An OS library update cannot replace embedded code. Upgrade the pinned binary package and regenerate standalone launchers to adopt a fix. The current watcher only follows Bot API versions.                                                       |
-| musl versus glibc behavior             | DNS/load tests and an explicit thread-stack policy can expose or reduce differences.                                                                 | Both Linux variants currently run musl code. Site-specific DNS/search behavior and memory/performance characteristics can differ from glibc. Use consistent DNS infrastructure or a compatible custom build when exact host behavior is required. |
-| macOS minimum and Gatekeeper           | The deployment target now matches macOS 15 dependencies, and CI rejects newer-dependency warnings. Release signing/notarization can reduce warnings. | macOS 13/14 are unsupported. Developer ID signing and notarization require maintainer-controlled Apple credentials; current binaries are only ad-hoc signed. Organizational security policy can still block execution.                            |
-| Executable temporary storage           | Private extraction directories and normal-exit cleanup are implemented and tested.                                                                   | Compiled launchers need writable, executable `TMPDIR`/`TEMP`. On `noexec` systems choose an approved location, or use an installed custom binary through `TELEGRAM_BOT_API_BINARY`.                                                               |
-| Abrupt termination and leftover files  | The launcher forwards supported signals and cleans up after the child exits.                                                                         | SIGKILL, power loss, and some OS shutdowns cannot run cleanup. Use graceful shutdown and an OS-managed temporary-directory policy. Do not delete a running server's extraction directory.                                                         |
-| Native-process privileges              | Documentation and isolated CI make the boundary explicit.                                                                                            | Deno permissions do not sandbox the native child. Run it under a restricted OS account or a suitable container/service sandbox; the launcher cannot choose your filesystem and network policy.                                                    |
-| Diagnosing a production-only failure   | Separate symbols, dependency inventories, and original artifacts can make crashes easier to diagnose.                                                | Preserve logs and the exact version/build identity. Current stripped packages do not include debug symbols; do not expect a later rebuild to match old crash addresses.                                                                           |
-| Platform and package-manager limits    | Host detection and per-target smoke tests fail clearly on supported combinations.                                                                    | Deno currently has no musl standalone target and may download both libc variants. Unsupported OS/CPU combinations need a custom binary; the Deno/Node runtime has its own minimum OS requirements.                                                |
+- **HTTPS trust:** clean-machine certificate trust is not yet verified. The
+  macOS build uses Homebrew OpenSSL certificate paths; minimal images and
+  private CAs need appropriate roots. Do not assume `SSL_CERT_FILE` redirects
+  the pinned TDLib certificate loader, or disable certificate verification to
+  work around missing roots. Windows uses its OS certificate store. Successful
+  startup does not prove HTTPS webhooks work.
+- **Updates:** statically linked libraries are part of the server binary. OS
+  library updates cannot replace them; upgrade the binary package through a
+  launcher release and regenerate standalone executables to adopt fixes.
+- **Production use:** sustained-load behavior and site-specific DNS
+  compatibility are not yet established by the test suite. Validate your
+  deployment, and preserve logs and the exact version/build identity for
+  diagnostics. The stripped packages do not include debug symbols.
 
-The build-related trade-offs are grounded in
-[musl's documented differences](https://wiki.musl-libc.org/functional-differences-from-glibc.html),
-[GCC's static/PIE options](https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html),
-and
-[Apple's distribution requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+## Versions
 
-## Versions and development
+The launcher and native server are versioned separately. Each launcher release
+pins an exact binary package version; launcher-only updates can reuse cached
+binaries. This checkout uses launcher `0.1.0` and Bot API `10.3.0`. Native
+rebuilds use versions such as `10.3.0-build.N`.
 
-Binary packages and `bot-api-binaries` share upstream version `10.3.0`; rebuilds
-use `10.3.0-build.N`. The launcher starts at `0.1.0` and pins the exact binary
-version in source. Launcher-only fixes keep that pin, so they reuse already
-cached binary packages. Moving to a new upstream server requires a new launcher
-release.
+## Contributing
 
-Upstream currently has **no Git tags**. The initial pin is the immutable
-[commit declaring version 10.3](https://github.com/tdlib/telegram-bot-api/commit/2efabc722e9493b9cac450233198d09e5cea0573).
-The watcher prefers version tags if upstream starts publishing them; otherwise
-it watches changes to the declared CMake version, not arbitrary master commits.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, and build
+guidance. Maintainer follow-ups are tracked in [KIV.md](KIV.md); release
+procedures are in [RELEASING.md](RELEASING.md).
 
-```sh
-deno task verify
-deno task versions
-TELEGRAM_BOT_API_BINARY=/path/to/existing/server deno task dev --help
-```
+## License
 
-Tests use scripts, not a locally built native server. `deno.local.json` maps the
-exact npm import to the checked-in resolver for pre-publication work. Production
-uses the actual static npm import. **All native builds, including
-`deno compile`, belong in GitHub Actions.**
-
-See [RELEASING.md](RELEASING.md) and the
-[architecture decision](docs/adr/0001-prebuilt-binaries.md). Launcher code is
-MIT licensed; the server is Boost-licensed and contains upstream third-party
-dependencies.
+The launcher is [MIT licensed](LICENSE). The server is Boost-licensed and
+contains third-party dependencies; see the
+[bundled notices](licenses/README.md).
