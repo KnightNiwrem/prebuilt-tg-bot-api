@@ -3,6 +3,8 @@ import type { PackedPackage } from "./assemble.ts";
 /** Loopback-only registry for testing real npm tarballs before public publication. */
 export function testRegistry(
   packages: PackedPackage[],
+  tarballDirectory = "dist/packages",
+  onTarball?: (name: string) => void,
 ): Deno.HttpServer<Deno.NetAddr> {
   const server: Deno.HttpServer<Deno.NetAddr> = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
@@ -10,8 +12,9 @@ export function testRegistry(
       const path = decodeURIComponent(new URL(request.url).pathname).slice(1);
       const tarball = packages.find((pkg) => path === pkg.filename);
       if (tarball) {
+        onTarball?.(tarball.name);
         return new Response(
-          await Deno.readFile(`dist/packages/${tarball.filename}`),
+          await Deno.readFile(`${tarballDirectory}/${tarball.filename}`),
           { headers: { "content-type": "application/octet-stream" } },
         );
       }

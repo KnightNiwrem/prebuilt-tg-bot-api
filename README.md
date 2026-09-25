@@ -132,6 +132,11 @@ Checked against **Deno 2.9.6 source on 2026-09-25**:
   restores OS/CPU only. This Deno release **does not honor npm's `libc`
   constraint**.
 
+CI also verifies the downloaded tarball set empirically with JavaScript-only npm
+fixtures in `scripts/check-package.ts`: one matching OS/CPU package outside
+Linux, and both matching libc variants on Linux. The same check performs a
+complete JSR publish dry-run without creating public registry entries.
+
 Consequently Deno may fetch both Linux packages for the matching CPU, including
 one extra package on Alpine. The meta-package detects the host libc at runtime
 and selects the right package. Current npm honors the package constraints. Do

@@ -25,6 +25,11 @@ registry. This exercises the real npm resolver and optional dependencies without
 occupying public version numbers. Test-registry lockfiles stay under ignored
 `dist/`.
 
+Ordinary CI additionally runs `scripts/check-package.ts` with JavaScript-only
+dependency fixtures. This validates JSR's package/API checks and asserts Deno's
+OS/CPU/libc filtering before native artifacts or registry entries exist. It does
+not substitute for the native smoke matrix or the final public lockfile check.
+
 ## Two version streams
 
 `upstream.json` records the source commit, optional tag, and native package

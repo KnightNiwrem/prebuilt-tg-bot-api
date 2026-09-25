@@ -22,3 +22,5 @@ jobs:
           node-version: 24
       - run: deno task verify
       - run: deno task versions
+      - name: Validate JSR package against unpublished dependency fixtures
+        run: deno run -A scripts/check-package.ts
