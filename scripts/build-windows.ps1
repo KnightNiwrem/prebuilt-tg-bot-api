@@ -11,4 +11,5 @@ if ($LASTEXITCODE) { throw 'CMake configuration failed' }
 cmake --build "$env:RUNNER_TEMP/bot-api-build" --config Release --target telegram-bot-api --parallel 2
 if ($LASTEXITCODE) { throw 'Native build failed' }
 New-Item -ItemType Directory -Force dist | Out-Null
+& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" list | Out-File -Encoding utf8 dist/build-environment.txt
 Copy-Item "$env:RUNNER_TEMP/bot-api-build/Release/telegram-bot-api.exe" dist/

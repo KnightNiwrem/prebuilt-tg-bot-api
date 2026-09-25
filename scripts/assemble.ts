@@ -17,6 +17,10 @@ export async function assemble(): Promise<void> {
   await Deno.mkdir("dist/packages", { recursive: true });
   await Deno.mkdir("dist/release", { recursive: true });
   const checksums: string[] = [];
+  const licenses: string[] = [];
+  for await (const entry of Deno.readDir("licenses")) {
+    if (entry.isFile) licenses.push(entry.name);
+  }
   for (const target of targets) {
     const binary = binaryName(target);
     const source = `artifacts/native-${target}/${binary}`;
@@ -25,6 +29,11 @@ export async function assemble(): Promise<void> {
       throw new Error(`Not a native server binary: ${source}`);
     }
     const directory = `packages/binaries/${target}/bin`;
+    const notices = `packages/binaries/${target}/LICENSES`;
+    await Deno.mkdir(notices, { recursive: true });
+    for (const license of licenses) {
+      await Deno.copyFile(`licenses/${license}`, `${notices}/${license}`);
+    }
     await Deno.mkdir(directory, { recursive: true });
     await Deno.copyFile(source, `${directory}/${binary}`);
     if (Deno.build.os !== "windows") {
@@ -42,6 +51,13 @@ export async function assemble(): Promise<void> {
     "dist/release/SHA256SUMS",
     checksums.join("\n") + "\n",
   );
+  await Deno.mkdir("dist/release/LICENSES", { recursive: true });
+  for (const license of licenses) {
+    await Deno.copyFile(
+      `licenses/${license}`,
+      `dist/release/LICENSES/${license}`,
+    );
+  }
   await command("node", ["scripts/build-npm.mjs"]);
   const packed: PackedPackage[] = [];
   for (

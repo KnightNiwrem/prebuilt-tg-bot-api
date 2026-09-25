@@ -3,5 +3,6 @@ dist/
 artifacts/
 upstream/
 packages/binaries/*/bin/
+packages/binaries/*/LICENSES/
 *.tgz
 .DS_Store

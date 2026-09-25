@@ -14,6 +14,7 @@
   },
   "files": [
     "bin",
+    "LICENSES",
     "index.js",
     "index.d.ts"
   ],

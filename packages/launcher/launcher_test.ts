@@ -137,6 +137,13 @@ Deno.test("readiness timeout leaves stop available", async () => {
   }
 });
 
+Deno.test("stopping aborts a pending readiness wait", async () => {
+  const server = mockServer(["--never-listen"]);
+  const ready = assert.rejects(server.ready(), /stopped|exited/);
+  await server.stop();
+  await ready;
+});
+
 Deno.test({
   name: "stop escalates when SIGTERM is ignored",
   ignore: Deno.build.os === "windows",

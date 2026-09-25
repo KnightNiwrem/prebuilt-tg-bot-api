@@ -1,0 +1,33 @@
+name: Publish launcher
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: publish-launcher
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: deno task verify && deno task versions
+      - name: Verify real public dependencies and committed lockfile
+        run: deno check --frozen packages/launcher/cli.ts packages/launcher/mod.ts
+      - run: deno publish --dry-run
+      - run: deno publish
+      - name: Publish Node launcher from the same TypeScript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          node scripts/build-npm.mjs
+          npm publish ./dist/npm-launcher --provenance --access public

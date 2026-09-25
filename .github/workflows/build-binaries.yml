@@ -46,6 +46,7 @@ jobs:
       - name: Build fully static Linux server
         if: runner.os == 'Linux'
         run: |
+          mkdir -p dist
           docker run --rm -e CI=true -v "$PWD:/work" -w /work alpine:3.22 sh scripts/build-linux.sh
       - name: Build macOS server
         if: runner.os == 'macOS'

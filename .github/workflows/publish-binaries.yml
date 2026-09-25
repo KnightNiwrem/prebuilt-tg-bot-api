@@ -1,0 +1,51 @@
+name: Publish binaries
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful build-binaries run for this exact commit
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+concurrency:
+  group: publish-binaries
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: deno run -A scripts/verify-build-run.ts "$BUILD_RUN_ID"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: artifacts
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - run: deno run -A scripts/assemble.ts
+      - name: Publish platforms, then meta-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: deno run -A scripts/publish-binaries.ts
+      - name: Release native binaries and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p 'require("./upstream.json").version')
+          tar -czf dist/release/LICENSES.tar.gz -C dist/release LICENSES
+          gh release create "binaries-v$VERSION" dist/release/telegram-bot-api-* dist/release/SHA256SUMS dist/release/LICENSES.tar.gz --target "$GITHUB_SHA" --title "Bot API $VERSION binaries" --generate-notes

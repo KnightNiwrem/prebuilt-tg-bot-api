@@ -10,6 +10,7 @@ cmake -S upstream -B "$RUNNER_TEMP/bot-api-build" -G Ninja \
   -DZLIB_INCLUDE_DIR="$(brew --prefix zlib)/include"
 cmake --build "$RUNNER_TEMP/bot-api-build" --target telegram-bot-api --parallel 3
 mkdir -p dist
+brew list --versions > dist/build-environment.txt
 cp "$RUNNER_TEMP/bot-api-build/telegram-bot-api" dist/telegram-bot-api
 strip dist/telegram-bot-api
 codesign --force --sign - dist/telegram-bot-api
