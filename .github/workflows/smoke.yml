@@ -1,0 +1,66 @@
+name: Smoke tests
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            triple: x86_64-unknown-linux-gnu
+          - target: linux-x64-musl
+            runner: ubuntu-24.04
+            triple: x86_64-unknown-linux-gnu
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+          - target: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+          - target: darwin-x64
+            runner: macos-15-intel
+            triple: x86_64-apple-darwin
+          - target: darwin-arm64
+            runner: macos-15
+            triple: aarch64-apple-darwin
+          - target: win32-x64
+            runner: windows-latest
+            triple: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: artifacts
+      - name: Assemble local npm packages
+        run: deno run -A scripts/assemble.ts
+      - name: Test installed npm and Deno launchers, then compile
+        env:
+          BOT_API_TEST_TARGET: ${{ matrix.target }}
+          BOT_API_COMPILE_TARGET: ${{ matrix.triple }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: deno run -A scripts/smoke.ts
+      - name: Test musl server under Alpine with Node
+        if: endsWith(matrix.target, '-musl')
+        env:
+          BOT_API_TEST_TARGET: ${{ matrix.target }}
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work node:24-alpine sh -c 'node dist/npm-launcher/cli.js --help'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.target }}
+          path: dist/compiled/*
+          if-no-files-found: error

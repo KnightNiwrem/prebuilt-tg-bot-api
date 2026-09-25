@@ -1,0 +1,72 @@
+name: Build binaries
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    paths:
+      - upstream.json
+      - scripts/build-*
+      - .github/workflows/build-binaries.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+          - target: linux-x64-musl
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: win32-x64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read upstream pin
+        id: pin
+        shell: bash
+        run: echo "ref=$(node -p 'require("./upstream.json").ref')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: tdlib/telegram-bot-api
+          ref: ${{ steps.pin.outputs.ref }}
+          submodules: recursive
+          path: upstream
+      - name: Build fully static Linux server
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -e CI=true -v "$PWD:/work" -w /work alpine:3.22 sh scripts/build-linux.sh
+      - name: Build macOS server
+        if: runner.os == 'macOS'
+        run: bash scripts/build-macos.sh
+      - name: Build Windows server
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Verify upstream executable
+        shell: bash
+        run: |
+          file dist/telegram-bot-api*
+          dist/telegram-bot-api --help > dist/help.txt 2>&1
+          grep -i 'telegram-bot-api' dist/help.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+  smoke:
+    needs: build
+    uses: ./.github/workflows/smoke.yml
+    secrets: inherit

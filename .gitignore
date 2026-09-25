@@ -1,0 +1,7 @@
+node_modules/
+dist/
+artifacts/
+upstream/
+packages/binaries/*/bin/
+*.tgz
+.DS_Store
