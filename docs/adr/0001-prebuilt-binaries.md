@@ -59,7 +59,12 @@ required.
 - **Windows:** upstream explicitly documents MSVC/vcpkg builds. Keep x64 in the
   build and smoke matrix; success is required before publication. Use static
   vcpkg dependencies and terminate the child for supported console shutdown
-  signals. Windows arm64 is outside the agreed native matrix.
+  signals. Windows arm64 is outside the agreed native matrix. Upstream's CMake
+  minimum leaves CMP0091 on its old behavior, which ignores
+  `CMAKE_MSVC_RUNTIME_LIBRARY`. Set `CMAKE_POLICY_DEFAULT_CMP0091=NEW` before
+  configuration and verify the resulting executable imports no VC runtime,
+  OpenSSL, or zlib DLLs. The first CI artifact exposed this despite passing help
+  on a runner with the redistributable installed.
 - **musl compilation:** Deno offers GNU/Linux runtime targets, not native musl
   targets. Both Alpine packages are tested through native Node. The five agreed
   targets for which Deno supplies runtimes are compiled and executed in CI;
