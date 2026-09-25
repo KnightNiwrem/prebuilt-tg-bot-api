@@ -7,28 +7,32 @@ const require = createRequire(import.meta.url);
 
 /** Detect the host C library without executing a shell or requiring --allow-sys. */
 export function detectLibc() {
-  try {
-    if (readdirSync("/lib").some((name) => /^ld-musl-.*\.so\.1$/.test(name))) {
-      return "musl";
-    }
-  } catch { /* Try the remaining probes. */ }
+  // Prefer the runtime's libc on Node: glibc hosts can also have musl installed.
+  // Deno's compatibility report needs --allow-sys, so use filesystem probes there.
+  if (!("Deno" in globalThis) && process.report?.getReport) {
+    try {
+      const report = process.report.getReport();
+      if (report.header?.glibcVersionRuntime) return "glibc";
+      if (report.sharedObjects?.some((path) => /musl/.test(path))) {
+        return "musl";
+      }
+    } catch { /* Fall back if diagnostic reports are unavailable. */ }
+  }
   try {
     const ldd = readFileSync("/usr/bin/ldd", "utf8");
     if (ldd.includes("musl")) return "musl";
     if (/GNU|GLIBC|glibc/.test(ldd)) return "glibc";
   } catch { /* Some minimal images don't ship ldd. */ }
+  try {
+    if (readdirSync("/lib").some((name) => /^ld-musl-.*\.so\.1$/.test(name))) {
+      return "musl";
+    }
+  } catch { /* Try the remaining probes. */ }
   if (
     existsSync("/lib64/ld-linux-x86-64.so.2") ||
     existsSync("/lib/ld-linux-aarch64.so.1")
   ) {
     return "glibc";
-  }
-  // Node's report is useful on unusual layouts. Deno's compatibility report
-  // requires additional permissions, so do not use it there.
-  if (!("Deno" in globalThis) && process.report?.getReport) {
-    const report = process.report.getReport();
-    if (report.header?.glibcVersionRuntime) return "glibc";
-    if (report.sharedObjects?.some((path) => /musl/.test(path))) return "musl";
   }
   throw new Error(
     "Cannot determine Linux libc. Set TELEGRAM_BOT_API_BINARY to a compatible executable.",

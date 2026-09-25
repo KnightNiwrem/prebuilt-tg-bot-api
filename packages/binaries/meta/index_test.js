@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import process from "node:process";
 import { detectLibc, targetFor } from "./index.js";
 
@@ -23,4 +25,20 @@ test("unsupported targets name the failing platform", () => {
 });
 test("Linux libc detection", { skip: process.platform !== "linux" }, () => {
   assert.ok(["glibc", "musl"].includes(detectLibc()));
+});
+
+test("Node glibc wins when a musl loader is also installed", (t) => {
+  t.mock.method(fs, "readdirSync", () => ["ld-musl-x86_64.so.1"]);
+  t.mock.method(
+    process.report,
+    "getReport",
+    () => ({ header: { glibcVersionRuntime: "2.39" }, sharedObjects: [] }),
+  );
+  syncBuiltinESMExports();
+  try {
+    assert.equal(detectLibc(), "glibc");
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
 });
