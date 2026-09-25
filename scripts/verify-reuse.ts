@@ -51,7 +51,7 @@ function nativeJob(workflow: string): string {
     !/^env:/m.test(workflow),
     "Review global build environment before allowing artifact reuse",
   );
-  const job = workflow.match(/\n  build:\n([\s\S]*?)\n  smoke:/)?.[1];
+  const job = workflow.match(/\n {2}build:\n([\s\S]*?)\n {2}smoke:/)?.[1];
   assert.ok(job, "Cannot identify native build recipe");
   return job.replace("    if: inputs.native_run_id == ''\n", "");
 }

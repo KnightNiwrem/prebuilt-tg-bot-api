@@ -123,7 +123,7 @@ advertised as Alpine-compatible. See
 
 ### Deno optional dependency verification
 
-Checked against **Deno 2.9.6 source on 2026-09-25**:
+Checked against **Deno 2.9.6 and the current 2.9.7 source on 2026-09-25**:
 
 - [`all_system_packages` and `as_valid_serialized_for_system`](https://github.com/denoland/deno/blob/v2.9.6/libs/npm/resolution/snapshot.rs)
   filter incompatible optional dependencies using OS/CPU system metadata.
@@ -131,6 +131,11 @@ Checked against **Deno 2.9.6 source on 2026-09-25**:
   carries `os` and `cpu`, but no `libc`. The serialized resolver likewise
   restores OS/CPU only. This Deno release **does not honor npm's `libc`
   constraint**.
+
+The same behavior remains in the current
+[2.9.7 resolver](https://github.com/denoland/deno/blob/v2.9.7/libs/npm/resolution/snapshot.rs)
+and
+[registry schema](https://github.com/denoland/deno/blob/v2.9.7/libs/npm/registry.rs).
 
 CI also verifies the downloaded tarball set empirically with JavaScript-only npm
 fixtures in `scripts/check-package.ts`: one matching OS/CPU package outside
