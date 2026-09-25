@@ -39,6 +39,27 @@ for (
     `Cannot reuse artifacts after changing ${path}`,
   );
 }
+const oldWorkflow = await api(
+  `contents/.github/workflows/build-binaries.yml?ref=${run.head_sha}`,
+);
+const previousWorkflow = atob(oldWorkflow.content.replace(/\s/g, ""));
+const currentWorkflow = await Deno.readTextFile(
+  ".github/workflows/build-binaries.yml",
+);
+function nativeJob(workflow: string): string {
+  assert.ok(
+    !/^env:/m.test(workflow),
+    "Review global build environment before allowing artifact reuse",
+  );
+  const job = workflow.match(/\n  build:\n([\s\S]*?)\n  smoke:/)?.[1];
+  assert.ok(job, "Cannot identify native build recipe");
+  return job.replace("    if: inputs.native_run_id == ''\n", "");
+}
+assert.equal(
+  nativeJob(previousWorkflow),
+  nativeJob(currentWorkflow),
+  "Native job recipe changed; run a fresh build",
+);
 console.log(
   `Reusing seven successful native jobs from ${id} (${run.head_sha}); source pin and native scripts match.`,
 );
