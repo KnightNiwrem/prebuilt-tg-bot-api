@@ -34,6 +34,7 @@ const launcher = JSON.parse(
 );
 const packages = JSON.parse(await Deno.readTextFile("dist/packages.json"));
 const registry = testRegistry(packages);
+let registryStopped = false;
 const directory = resolve(`dist/smoke-${target}`);
 await Deno.mkdir(directory, { recursive: true });
 const registryUrl = `http://127.0.0.1:${registry.addr.port}/`;
@@ -122,6 +123,8 @@ try {
       join(directory, "node_modules"),
       join(directory, "hidden-node_modules"),
     );
+    await registry.shutdown();
+    registryStopped = true;
     const clean = await Deno.makeTempDir();
     try {
       await help(executable, ["--help"], {
@@ -132,6 +135,7 @@ try {
           TEMP: clean,
           TMP: clean,
           NPM_CONFIG_REGISTRY: "http://127.0.0.1:1/",
+          DENO_NPM_REGISTRY: "http://127.0.0.1:1/",
         },
       });
       for await (const entry of Deno.readDir(clean)) {
@@ -160,5 +164,5 @@ try {
     );}
   console.log(`Smoke passed: ${target}, binary ${pin.version}`);
 } finally {
-  await registry.shutdown();
+  if (!registryStopped) await registry.shutdown();
 }

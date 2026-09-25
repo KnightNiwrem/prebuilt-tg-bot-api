@@ -171,7 +171,8 @@ Windows).
 The distributed executable needs neither Deno nor npm nor a network connection
 to start its embedded server. The server may need network access for its own
 work. CI tests compiled launchers with the build cache and installed npm tree
-moved out of reach. Cross-target compilation support is Deno's; the matrix
+moved out of reach, the test registry shut down, and registry URLs made
+unreachable. Cross-target compilation support is Deno's; the matrix
 validates each target on its native runner.
 
 macOS binaries are ad-hoc signed in CI, not Apple-notarized. If a browser
