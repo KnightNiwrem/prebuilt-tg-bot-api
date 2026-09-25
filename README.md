@@ -187,6 +187,61 @@ download is quarantined, inspect its origin, then use
 `xattr -d com.apple.quarantine /path/to/bot-api` (or the native server path).
 Ad-hoc signing alone does not remove Gatekeeper quarantine.
 
+## Portability safeguards and remaining gotchas
+
+An unmodified server is not necessarily equivalent to a build against your
+host's libraries. The current CI verifies startup, package selection, supported
+Deno compilation targets, and optional credentialed HTTP responses. Those tests
+do not yet establish clean-machine HTTPS trust, production load behavior, or
+compatibility with every enterprise DNS configuration.
+
+The following mitigations are **recommended follow-up work, not implemented
+yet**:
+
+1. **Portable HTTPS trust:** build OpenSSL with appropriate system CA paths and
+   test the pinned TDLib TLS code without the build machine's Homebrew files.
+   Test trusted and untrusted certificates; never work around missing roots by
+   disabling verification. The pinned
+   [TDLib certificate loader](https://github.com/tdlib/td/blob/bc9c263e2bfee06aaab41e82db51a103376030bc/tdnet/td/net/SslCtx.cpp)
+   reads OpenSSL's compiled-in paths on Unix. It does not use the usual
+   environment-aware default-path loader, so do not assume `SSL_CERT_FILE`
+   redirects it. Windows uses its OS certificate store.
+2. **Linux hardening and thread stacks:** evaluate static PIE with matching
+   compilation flags, verify the resulting ELF headers and actual randomized
+   loading in CI, and explicitly size/test worker-thread stacks. The current
+   recipe uses `-static`, not `-static-pie`. Neither passing `--help` nor adding
+   a linker flag alone proves all runtime hardening properties.
+3. **Dependency maintenance:** add dependency-only update monitoring and
+   vulnerability review alongside the Bot API version watcher. Record exact
+   dependency inputs and archive inventories with releases. Publish security
+   rebuilds under `-build.N` and advance the launcher's exact binary pin.
+4. **Diagnostics and broader verification:** generate and retain matching debug
+   symbols separately from npm payloads, preserve original release artifacts,
+   and add clean-host TLS, DNS, and sustained-load tests. Pin build inputs where
+   practical; do not describe the current floating package-manager inputs as
+   byte-for-byte reproducible.
+
+These reduce risks we control. Some limits still require operator choices or
+external credentials, even after those mitigations:
+
+| Gotcha                                 | What the project can reduce                                                                                                                          | Remaining limit / operator action                                                                                                                                                                                                                 |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing or private CA roots            | Portable defaults and clean-host TLS tests are planned; the current macOS build still uses Homebrew OpenSSL paths.                                   | Minimal images need a maintained CA store. Private trust policies require explicitly provisioned roots; do not disable TLS verification. Startup success is not proof that HTTPS webhooks work.                                                   |
+| Updates to statically linked libraries | Dependency monitoring, reviewed rebuilds, and exact-version releases can shorten response time.                                                      | An OS library update cannot replace embedded code. Upgrade the pinned binary package and regenerate standalone launchers to adopt a fix. The current watcher only follows Bot API versions.                                                       |
+| musl versus glibc behavior             | DNS/load tests and an explicit thread-stack policy can expose or reduce differences.                                                                 | Both Linux variants currently run musl code. Site-specific DNS/search behavior and memory/performance characteristics can differ from glibc. Use consistent DNS infrastructure or a compatible custom build when exact host behavior is required. |
+| macOS minimum and Gatekeeper           | The deployment target now matches macOS 15 dependencies, and CI rejects newer-dependency warnings. Release signing/notarization can reduce warnings. | macOS 13/14 are unsupported. Developer ID signing and notarization require maintainer-controlled Apple credentials; current binaries are only ad-hoc signed. Organizational security policy can still block execution.                            |
+| Executable temporary storage           | Private extraction directories and normal-exit cleanup are implemented and tested.                                                                   | Compiled launchers need writable, executable `TMPDIR`/`TEMP`. On `noexec` systems choose an approved location, or use an installed custom binary through `TELEGRAM_BOT_API_BINARY`.                                                               |
+| Abrupt termination and leftover files  | The launcher forwards supported signals and cleans up after the child exits.                                                                         | SIGKILL, power loss, and some OS shutdowns cannot run cleanup. Use graceful shutdown and an OS-managed temporary-directory policy. Do not delete a running server's extraction directory.                                                         |
+| Native-process privileges              | Documentation and isolated CI make the boundary explicit.                                                                                            | Deno permissions do not sandbox the native child. Run it under a restricted OS account or a suitable container/service sandbox; the launcher cannot choose your filesystem and network policy.                                                    |
+| Diagnosing a production-only failure   | Separate symbols, dependency inventories, and original artifacts can make crashes easier to diagnose.                                                | Preserve logs and the exact version/build identity. Current stripped packages do not include debug symbols; do not expect a later rebuild to match old crash addresses.                                                                           |
+| Platform and package-manager limits    | Host detection and per-target smoke tests fail clearly on supported combinations.                                                                    | Deno currently has no musl standalone target and may download both libc variants. Unsupported OS/CPU combinations need a custom binary; the Deno/Node runtime has its own minimum OS requirements.                                                |
+
+The build-related trade-offs are grounded in
+[musl's documented differences](https://wiki.musl-libc.org/functional-differences-from-glibc.html),
+[GCC's static/PIE options](https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html),
+and
+[Apple's distribution requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
 ## Versions and development
 
 Binary packages and `bot-api-binaries` share upstream version `10.3.0`; rebuilds
