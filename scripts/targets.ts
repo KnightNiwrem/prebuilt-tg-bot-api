@@ -9,3 +9,7 @@ export const targets = [
 ] as const;
 export const binaryName = (target: string): string =>
   target === "win32-x64" ? "telegram-bot-api.exe" : "telegram-bot-api";
+/** Linux servers are fully static, so glibc and musl packages share one build. */
+export const buildTarget = (target: string): string =>
+  target.replace(/-musl$/, "");
+export const buildTargets: string[] = [...new Set(targets.map(buildTarget))];

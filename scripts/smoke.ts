@@ -148,20 +148,20 @@ try {
       await Deno.remove(clean, { recursive: true });
     }
   }
-  if (Deno.env.get("TELEGRAM_API_ID") && Deno.env.get("TELEGRAM_API_HASH")) {
-    const binary = resolve(
-      `packages/binaries/${target}/bin/${binaryName(target)}`,
-    );
+  // Serve HTTP from the real binary; TELEGRAM_API_* secrets, when present,
+  // are inherited and add a credentialed request.
+  const binary = resolve(
+    `packages/binaries/${target}/bin/${binaryName(target)}`,
+  );
+  console.log(
     await command(Deno.execPath(), [
       "run",
       "--config",
       "deno.local.json",
       "-A",
       "scripts/http-smoke.ts",
-    ], { env: { TELEGRAM_BOT_API_BINARY: binary } });
-  } else {console.log(
-      "Credentialed HTTP smoke skipped: TELEGRAM_API_ID / TELEGRAM_API_HASH are not set.",
-    );}
+    ], { env: { TELEGRAM_BOT_API_BINARY: binary } }),
+  );
   console.log(`Smoke passed: ${target}, binary ${pin.version}`);
 } finally {
   if (!registryStopped) await registry.shutdown();

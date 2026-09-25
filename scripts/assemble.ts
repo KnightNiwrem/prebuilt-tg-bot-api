@@ -2,7 +2,7 @@ import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { checkVersions } from "./check-versions.ts";
 import { command } from "./command.ts";
-import { binaryName, targets } from "./targets.ts";
+import { binaryName, buildTarget, targets } from "./targets.ts";
 
 export interface PackedPackage {
   name: string;
@@ -23,7 +23,7 @@ export async function assemble(): Promise<void> {
   }
   for (const target of targets) {
     const binary = binaryName(target);
-    const source = `artifacts/native-${target}/${binary}`;
+    const source = `artifacts/native-${buildTarget(target)}/${binary}`;
     const bytes = await Deno.readFile(source);
     if (bytes.length < 100_000) {
       throw new Error(`Not a native server binary: ${source}`);

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       native_run_id:
-        description: Optional previous run with seven successful native jobs and unchanged native scripts
+        description: Optional previous run with successful native jobs and unchanged native scripts
         required: false
         type: string
   workflow_call:
@@ -32,15 +32,7 @@ jobs:
     needs: verify-reuse
     strategy:
       matrix:
-        target: [
-          linux-x64,
-          linux-x64-musl,
-          linux-arm64,
-          linux-arm64-musl,
-          darwin-x64,
-          darwin-arm64,
-          win32-x64,
-        ]
+        target: [linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -59,15 +51,12 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
+      # Linux builds are fully static; the glibc and musl packages share them.
       matrix:
         include:
           - target: linux-x64
             runner: ubuntu-24.04
-          - target: linux-x64-musl
-            runner: ubuntu-24.04
           - target: linux-arm64
-            runner: ubuntu-24.04-arm
-          - target: linux-arm64-musl
             runner: ubuntu-24.04-arm
           - target: darwin-x64
             runner: macos-15-intel
