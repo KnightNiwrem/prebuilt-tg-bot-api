@@ -1,0 +1,34 @@
+{
+  "name": "@deerdaily/bot-api-linux-arm64-musl",
+  "version": "10.3.0",
+  "description": "Prebuilt official Telegram Bot API server",
+  "license": "BSL-1.0",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "index.js",
+    "index.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KnightNiwrem/prebuilt-tg-bot-api.git",
+    "directory": "packages/binaries/linux-arm64-musl"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "libc": [
+    "musl"
+  ]
+}

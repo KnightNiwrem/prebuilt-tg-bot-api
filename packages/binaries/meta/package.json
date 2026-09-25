@@ -1,0 +1,33 @@
+{
+  "name": "@deerdaily/bot-api-binaries",
+  "version": "10.3.0",
+  "description": "Prebuilt official Telegram Bot API server",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KnightNiwrem/prebuilt-tg-bot-api.git",
+    "directory": "packages/binaries/meta"
+  },
+  "optionalDependencies": {
+    "@deerdaily/bot-api-linux-x64": "10.3.0",
+    "@deerdaily/bot-api-linux-x64-musl": "10.3.0",
+    "@deerdaily/bot-api-linux-arm64": "10.3.0",
+    "@deerdaily/bot-api-linux-arm64-musl": "10.3.0",
+    "@deerdaily/bot-api-darwin-x64": "10.3.0",
+    "@deerdaily/bot-api-darwin-arm64": "10.3.0",
+    "@deerdaily/bot-api-win32-x64": "10.3.0"
+  }
+}

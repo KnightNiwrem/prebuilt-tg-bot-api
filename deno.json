@@ -3,11 +3,13 @@
   "tasks": {
     "check": "deno check --config deno.local.json packages/launcher/cli.ts packages/launcher/mod.ts scripts/*.ts",
     "test": "deno test --config deno.local.json -A packages/launcher scripts && node --test packages/binaries/meta/*_test.js",
-    "verify": "deno fmt --check && deno lint && deno task check && deno task test",
+    "verify": "deno fmt --check && deno lint --config deno.local.json && deno task check && deno task test",
     "dev": "deno run --config deno.local.json -A packages/launcher/cli.ts",
     "versions": "deno run --allow-read scripts/check-versions.ts"
   },
-  "fmt": { "exclude": ["prompt.md", "dist", "artifacts", "upstream", "node_modules"] },
+  "fmt": {
+    "exclude": ["prompt.md", "dist", "artifacts", "upstream", "node_modules"]
+  },
   "lint": { "exclude": ["dist", "artifacts", "upstream", "node_modules"] },
   "exclude": ["dist", "artifacts", "upstream", "node_modules"]
 }
