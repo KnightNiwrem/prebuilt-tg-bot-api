@@ -55,11 +55,13 @@ if otool -L dist/telegram-bot-api | grep -E '/opt/homebrew|/usr/local|libssl|lib
   exit 1
 fi
 # The default CA locations are string constants inside the static OpenSSL.
-if ! strings dist/telegram-bot-api | grep -qx '/etc/ssl/cert.pem'; then
+# Save the strings first: grep -q exiting early would fail strings under pipefail.
+strings dist/telegram-bot-api > "$RUNNER_TEMP/server-strings.txt"
+if ! grep -qx '/etc/ssl/cert.pem' "$RUNNER_TEMP/server-strings.txt"; then
   echo 'Expected OpenSSL to load CA roots from /etc/ssl/cert.pem' >&2
   exit 1
 fi
-if strings dist/telegram-bot-api | grep -E '(/opt/homebrew|/usr/local)/etc/openssl'; then
+if grep -E '(/opt/homebrew|/usr/local)/etc/openssl' "$RUNNER_TEMP/server-strings.txt"; then
   echo 'Homebrew OpenSSL paths leaked into the server' >&2
   exit 1
 fi
