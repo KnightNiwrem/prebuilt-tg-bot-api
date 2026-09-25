@@ -17,9 +17,10 @@ limitations belong in the [README](README.md).
 
 ## Portable HTTPS trust
 
-- [ ] Build OpenSSL with appropriate system CA paths and test the pinned TDLib
-      TLS code without the build machine's Homebrew files. The current macOS
-      build uses Homebrew OpenSSL paths.
+- [x] Build OpenSSL with system CA paths. macOS now builds a pinned OpenSSL
+      source release with `OPENSSLDIR=/etc/ssl` (the system bundle is
+      `/etc/ssl/cert.pem`); Linux uses Alpine's `/etc/ssl`. CI asserts the
+      compiled-in paths but does not yet exercise a TLS handshake.
 - [ ] Test trusted and untrusted certificates on clean hosts. Never work around
       missing roots by disabling verification. Minimal images still need
       maintained CA stores, and private trust policies require explicitly

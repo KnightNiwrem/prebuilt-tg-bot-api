@@ -9,7 +9,7 @@ revisions.
 | Component                | Upstream source / license                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Telegram Bot API / TDLib | [Boost 1.0](https://github.com/tdlib/telegram-bot-api/blob/master/LICENSE_1_0.txt)                                                                                  |
-| OpenSSL 3                | [Apache 2.0](https://github.com/openssl/openssl/blob/openssl-3.5.4/LICENSE.txt)                                                                                     |
+| OpenSSL 3                | [Apache 2.0](https://github.com/openssl/openssl/blob/openssl-3.5.8/LICENSE.txt)                                                                                     |
 | zlib                     | [zlib license](https://github.com/madler/zlib/blob/v1.3.1/LICENSE)                                                                                                  |
 | musl                     | [Copyright and component notices](https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT)                                                                               |
 | GCC runtime              | [GPLv3](https://github.com/gcc-mirror/gcc/blob/master/COPYING3) with the [runtime library exception](https://github.com/gcc-mirror/gcc/blob/master/COPYING.RUNTIME) |
