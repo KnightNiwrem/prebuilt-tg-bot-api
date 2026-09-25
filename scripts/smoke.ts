@@ -126,8 +126,20 @@ try {
     try {
       await help(executable, ["--help"], {
         cwd: clean,
-        env: { DENO_DIR: clean, NPM_CONFIG_REGISTRY: "http://127.0.0.1:1/" },
+        env: {
+          DENO_DIR: clean,
+          TMPDIR: clean,
+          TEMP: clean,
+          TMP: clean,
+          NPM_CONFIG_REGISTRY: "http://127.0.0.1:1/",
+        },
       });
+      for await (const entry of Deno.readDir(clean)) {
+        assert.ok(
+          !entry.name.startsWith("telegram-bot-api-"),
+          "Compiled launcher must clean up the extracted server",
+        );
+      }
     } finally {
       await Deno.remove(clean, { recursive: true });
     }
