@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { targets } from "./targets.ts";
+import { join } from "node:path";
+import { binaryVersionPattern } from "./versions.ts";
 
-export async function checkVersions(): Promise<void> {
+export async function checkVersions(root = "."): Promise<void> {
   const read = async (path: string) =>
-    JSON.parse(await Deno.readTextFile(path));
+    JSON.parse(await Deno.readTextFile(join(root, path)));
   const pin = await read("upstream.json");
-  assert.match(pin.version, /^\d+\.\d+\.\d+(?:-build\.\d+)?$/);
+  assert.match(pin.version, binaryVersionPattern);
   assert.match(pin.ref, /^[a-f0-9]{40}$/);
   const meta = await read("packages/binaries/meta/package.json");
   assert.equal(meta.version, pin.version);
@@ -22,11 +24,17 @@ export async function checkVersions(): Promise<void> {
   }
   const specifier = `npm:@deerdaily/bot-api-binaries@${pin.version}`;
   assert.ok(
-    (await Deno.readTextFile("packages/launcher/src/binary.ts")).includes(
-      `from "${specifier}"`,
-    ),
+    (await Deno.readTextFile(join(root, "packages/launcher/src/binary.ts")))
+      .includes(
+        `from "${specifier}"`,
+      ),
+    `Launcher source is missing the expected import: ${specifier}`,
   );
-  assert.ok((await read("deno.local.json")).imports[specifier]);
+  assert.equal(
+    typeof (await read("deno.local.json")).imports?.[specifier],
+    "string",
+    `Local import map is missing the expected pin: ${specifier}`,
+  );
   console.log(`Binary packages and launcher pin agree: ${pin.version}`);
 }
 if (import.meta.main) await checkVersions();

@@ -1,6 +1,11 @@
 name: Refresh public lockfile
 on:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Reviewed full commit SHA; abort if main has moved
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -8,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   refresh:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

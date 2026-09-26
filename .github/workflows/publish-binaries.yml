@@ -2,6 +2,10 @@ name: Publish binaries
 on:
   workflow_dispatch:
     inputs:
+      expected_sha:
+        description: Reviewed full commit SHA; abort if main has moved
+        required: true
+        type: string
       phase:
         description: Stage npm packages or finalize after local npm approval
         type: choice
@@ -29,7 +33,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   stage:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.phase == 'stage' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'stage' }}
     runs-on: ubuntu-24.04
     environment: release
     permissions:
@@ -37,6 +41,7 @@ jobs:
       actions: read
       id-token: write
     env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
       GH_TOKEN: ${{ github.token }}
       BUILD_RUN_ID: ${{ inputs.build_run_id }}
       STAGING_RUN_ID: ${{ inputs.staging_run_id }}
@@ -94,13 +99,14 @@ jobs:
         if: ${{ always() && hashFiles('dist/release-metadata/release.json') != '' }}
         run: deno run --config deno.local.json -A scripts/release-ci.ts summary
   finalize:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.phase == 'finalize' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'finalize' }}
     runs-on: ubuntu-24.04
     environment: release
     permissions:
       contents: write
       actions: read
     env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
       GH_TOKEN: ${{ github.token }}
       BUILD_RUN_ID: ${{ inputs.build_run_id }}
       STAGING_RUN_ID: ${{ inputs.staging_run_id }}

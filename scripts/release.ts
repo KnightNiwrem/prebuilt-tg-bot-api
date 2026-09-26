@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { targets } from "./targets.ts";
+import { binaryVersionPattern } from "./versions.ts";
 
 export const repository = "KnightNiwrem/prebuilt-tg-bot-api";
 export const registry = "https://registry.npmjs.org";
@@ -43,6 +44,18 @@ export function numericId(value: string): string {
     "Expected a positive numeric run ID/attempt",
   );
   return value;
+}
+export function validateReleaseCommit(expected: string, actual: string): void {
+  assert.match(
+    expected,
+    /^[a-f0-9]{40}$/,
+    "Expected a reviewed full commit SHA",
+  );
+  assert.equal(
+    actual,
+    expected,
+    "main moved after review; review the new commit before dispatching",
+  );
 }
 export function releaseKind(value: string): ReleaseKind {
   assert.ok(
@@ -116,7 +129,7 @@ export function validateRelease(value: unknown): asserts value is Release {
     "Unexpected packages or approval order",
   );
   for (const pkg of release.packages) {
-    assert.match(pkg.version, /^\d+\.\d+\.\d+(?:-build\.\d+)?$/);
+    assert.match(pkg.version, binaryVersionPattern);
     assert.match(pkg.filename, /^[a-zA-Z0-9._-]+\.tgz$/);
     assert.match(pkg.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/);
     assert.match(pkg.shasum, /^[a-f0-9]{40}$/);

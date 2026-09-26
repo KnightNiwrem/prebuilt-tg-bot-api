@@ -27,8 +27,8 @@ const help = `Metadata-only maintainer commands (no native downloads):
 
 ATTEMPT defaults to 1. Dry runs never dispatch, stage, approve, or publish.
 Run from the repository root at the reviewed release commit. Dispatches require
-that commit to be main's current head. Review and approval require npm login;
-approval preserves npm's interactive 2FA. Requires Node 24, npm >=11.15, gh, Deno.`;
+that commit to be main's current head. Review needs GitHub access; approval also
+requires npm login and preserves interactive 2FA. Requires Node 24, npm >=11.15, gh, Deno.`;
 
 async function main(): Promise<void> {
   const dryRun = Deno.args.includes("--dry-run");
@@ -168,6 +168,7 @@ async function main(): Promise<void> {
     default:
       throw new Error(help);
   }
+  fields.expected_sha = commit;
   const argv = [
     "workflow",
     "run",

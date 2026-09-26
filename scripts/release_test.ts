@@ -10,6 +10,7 @@ import {
   stagePackages,
   stageReceipt,
   validateRelease,
+  validateReleaseCommit,
   validateRun,
   verifyTarball,
   type WorkflowRun,
@@ -105,6 +106,7 @@ Deno.test("tarball verification and npm receipts reject changed bytes", () => {
   verifyTarball(pkg, bytes);
   assert.throws(() => verifyTarball(pkg, new TextEncoder().encode("changed")));
   assert.equal(stageReceipt(receipt(pkg), pkg), stageId);
+  assert.equal(stageReceipt(JSON.stringify({ ...pkg, stageId }), pkg), stageId);
   assert.throws(() =>
     stageReceipt(receipt({ ...pkg, ...hashes(new Uint8Array([1])) }), pkg)
   );
@@ -214,8 +216,53 @@ Deno.test("meta-package approval requires all seven exact public integrities", a
         Promise.resolve({
           name: pkg.name,
           version: pkg.version,
-          dist: { integrity: "wrong" },
+          dist: {
+            integrity: pkg.name === release.packages.at(-2)!.name
+              ? "wrong"
+              : pkg.integrity,
+          },
         })),
     /different bytes/,
+  );
+});
+
+Deno.test("launcher releases require one launcher package and no native assets", () => {
+  const release: Release = {
+    ...fixture(),
+    kind: "launcher",
+    assets: {},
+    packages: [{
+      ...fixture().packages[0],
+      name: "@deerdaily/bot-api",
+      version: "0.1.0",
+      filename: "launcher.tgz",
+    }],
+  };
+  delete release.buildRunId;
+  validateRelease(release);
+  assert.throws(() =>
+    validateRelease({ ...release, assets: { SHA256SUMS: "a".repeat(64) } })
+  );
+  assert.throws(() =>
+    validateRelease({ ...release, packages: [fixture().packages[0]] })
+  );
+  assert.throws(() =>
+    validateRelease({
+      ...release,
+      packages: [...release.packages, ...release.packages],
+    })
+  );
+});
+
+Deno.test("dispatch refuses main moving after local review", () => {
+  const reviewed = "a".repeat(40);
+  validateReleaseCommit(reviewed, reviewed);
+  assert.throws(
+    () => validateReleaseCommit(reviewed, "b".repeat(40)),
+    /main moved/,
+  );
+  assert.throws(
+    () => validateReleaseCommit("main", reviewed),
+    /full commit SHA/,
   );
 });

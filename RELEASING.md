@@ -57,8 +57,9 @@ No publishing credentials are needed for ordinary CI or native builds. Smoke
 tests use a temporary loopback registry. Ordinary CI also validates JSR against
 JavaScript dependency fixtures; these checks work before functional packages are
 public. They do not replace native smoke tests or the public lockfile check.
-Optional `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` secrets enable HTTP smoke
-coverage. Allow Actions to create PRs for the upstream watcher.
+Optional `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` secrets add credentialed
+`getMe` coverage; the basic HTTP smoke test always runs. Allow Actions to create
+PRs for the upstream watcher.
 
 References: [npm staged publishing](https://docs.npmjs.com/staged-publishing/),
 [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/),
@@ -164,9 +165,12 @@ the public lockfile is added.
    stays a draft until asset uploads finish. A staging run never creates a final
    release.
 
-For a rehearsal in CI, manually dispatch the workflow with `dry_run=true`. This
-prepares/checks packages remotely but never stages, approves, or publishes.
-Local `--dry-run` does not dispatch even that rehearsal.
+For a rehearsal in CI, manually dispatch the workflow with `dry_run=true` and
+`expected_sha` set to the reviewed full commit SHA. All release/lockfile
+dispatches carry this SHA; jobs refuse to run if `main` moved after the local
+preflight. The local task supplies it automatically. This prepares/checks
+packages remotely but never stages, approves, or publishes. Local `--dry-run`
+does not dispatch even that rehearsal.
 
 ### Recovery and retention
 
@@ -222,12 +226,13 @@ on the new commit. Changed native inputs require a fresh build.
    deno task release refresh-lockfile
    gh run list --workflow refresh-lockfile.yml --limit 5
    gh run watch <lockfile-run-id> --exit-status
-   gh run download <lockfile-run-id> --name public-lockfile-1 --dir /tmp/bot-api-public-lockfile
+   gh run download <lockfile-run-id> --name public-lockfile-<attempt> --dir /tmp/bot-api-public-lockfile
    ```
 
-   Review `commit.txt`, `deno.lock.diff`, and `deno.lock` in that small
-   artifact. Ensure the commit and exact binary pins match your checkout, copy
-   the reviewed lockfile into the repository, and commit it through the usual PR
+   Use the successful run attempt (normally `1`) in the artifact name. Review
+   `commit.txt`, `deno.lock.diff`, and `deno.lock` in that small artifact.
+   Ensure the commit and exact binary pins match your checkout, copy the
+   reviewed lockfile into the repository, and commit it through the usual PR
    process. Do not resolve public native dependencies on the local machine.
    Never invent integrity values or commit a loopback registry lockfile.
 2. Merge the lockfile and reviewed launcher version into `main`, check out that
@@ -287,6 +292,8 @@ with each release. Use a rebuild version if those environments change the
 shipped bytes.
 
 Smoke tests require exit code zero and upstream help text on its original output
-stream (upstream's logging may write help to stderr). With credentials, the API
-starts a server and requests the dummy getMe endpoint; any HTTP status proves
-the listener responds. No live Telegram credentials are required for normal CI.
+stream (upstream's logging may write help to stderr). The HTTP smoke always
+verifies the server's expected JSON 404 response, then checks that shutdown
+releases its listener. Port collisions retry with a fresh port. With credentials
+it also requests the dummy getMe endpoint. No live Telegram credentials are
+required for normal CI.

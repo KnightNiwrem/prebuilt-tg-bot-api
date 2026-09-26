@@ -23,6 +23,7 @@ import {
   repository,
   stagePackages,
   validateRelease,
+  validateReleaseCommit,
   verifyTarball,
 } from "./release.ts";
 
@@ -39,6 +40,7 @@ function context(): { commit: string; runId: string; attempt: string } {
     assert.ok(!Deno.env.get(key), `${key} must not be passed to release jobs`);
   }
   const commit = Deno.env.get("GITHUB_SHA")!;
+  validateReleaseCommit(Deno.env.get("EXPECTED_SHA")!, commit);
   assert.match(commit, /^[a-f0-9]{40}$/);
   return {
     commit,
