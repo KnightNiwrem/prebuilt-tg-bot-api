@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "npm:@deerdaily/bot-api-binaries@10.3.0": "./packages/binaries/meta/index.js"
+  },
+  "lock": false,
+  "exclude": ["dist", "artifacts", "upstream", "node_modules"]
+}

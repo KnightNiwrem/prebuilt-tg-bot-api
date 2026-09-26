@@ -1,0 +1,83 @@
+name: Smoke tests
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            triple: x86_64-unknown-linux-gnu
+          - target: linux-x64-musl
+            runner: ubuntu-24.04
+            triple: x86_64-unknown-linux-gnu
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+          - target: linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+          - target: darwin-x64
+            runner: macos-15-intel
+            triple: x86_64-apple-darwin
+          - target: darwin-arm64
+            runner: macos-15
+            triple: aarch64-apple-darwin
+          - target: win32-x64
+            runner: windows-latest
+            triple: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: native-*
+          path: artifacts
+      - name: Assemble local npm packages
+        run: deno run -A scripts/assemble.ts
+      - name: Check Windows static dependency linkage
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dumpbin) { throw 'Cannot locate dumpbin for dependency validation' }
+          $dependencies = & $dumpbin /dependents artifacts/native-win32-x64/telegram-bot-api.exe
+          if ($LASTEXITCODE) { throw 'Cannot inspect executable imports' }
+          $dependencies | Write-Output
+          if ($dependencies -match '(?i)(vcruntime|msvcp|libssl|libcrypto|zlib).*\.dll') {
+            throw 'Native server unexpectedly requires a redistributable runtime or shared OpenSSL/zlib'
+          }
+      - name: Test installed npm and Deno launchers, then compile
+        env:
+          BOT_API_TEST_TARGET: ${{ matrix.target }}
+          BOT_API_COMPILE_TARGET: ${{ matrix.triple }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: deno run -A scripts/smoke.ts
+      - name: Test musl server under Alpine with Node
+        if: endsWith(matrix.target, '-musl')
+        env:
+          BOT_API_TEST_TARGET: ${{ matrix.target }}
+        run: |
+          docker run --rm -e BOT_API_TEST_TARGET -v "$PWD:/work" -w /work node:24-alpine node scripts/alpine-smoke.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !endsWith(matrix.target, '-musl') }}
+        with:
+          name: launcher-${{ matrix.target }}
+          path: dist/compiled/*
+          if-no-files-found: error

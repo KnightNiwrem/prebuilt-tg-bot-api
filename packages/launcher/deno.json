@@ -1,0 +1,19 @@
+{
+  "name": "@deerdaily/bot-api",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./cli.ts",
+    "./api": "./mod.ts"
+  },
+  "publish": {
+    "include": [
+      "deno.json",
+      "cli.ts",
+      "mod.ts",
+      "src/**/*.ts",
+      "README.md",
+      "LICENSE"
+    ]
+  }
+}

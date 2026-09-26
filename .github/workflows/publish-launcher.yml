@@ -1,0 +1,122 @@
+name: Publish launcher
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Reviewed full commit SHA; abort if main has moved
+        required: true
+        type: string
+      phase:
+        description: Stage npm first; publish JSR only after local npm approval
+        type: choice
+        required: true
+        default: stage-npm
+        options: [stage-npm, publish-jsr]
+      staging_run_id:
+        description: Prior staging run to resume or finalize (leave empty for a new release)
+        type: string
+      staging_attempt:
+        description: Attempt of the prior staging run
+        type: string
+        default: "1"
+      dry_run:
+        description: Prepare and validate only; do not stage or publish
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: publish-launcher
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'stage-npm' }}
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GH_TOKEN: ${{ github.token }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      STAGING_ATTEMPT: ${{ inputs.staging_attempt }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm install --global npm@11.19.0
+      - run: deno run --config deno.local.json -A scripts/release-ci.ts preflight
+      - run: deno task verify && deno task versions
+      - name: Check public dependencies using the committed lockfile
+        run: deno check --frozen packages/launcher/cli.ts packages/launcher/mod.ts
+      - run: deno publish --dry-run
+      - name: Pack a new launcher
+        if: ${{ inputs.staging_run_id == '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts prepare launcher
+      - name: Restore exact launcher for a retry
+        if: ${{ inputs.staging_run_id != '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts restore launcher restage
+      - name: Save exact packages before staging
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-launcher-${{ github.run_attempt }}
+          path: dist/release-bundle/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Stage npm packages through OIDC
+        run: deno run --config deno.local.json -A scripts/release-ci.ts stage
+      - name: Save receipts even after partial staging
+        if: ${{ always() && hashFiles('dist/release-metadata/release.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-metadata-launcher-${{ github.run_attempt }}
+          path: dist/release-metadata/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report stages
+        if: ${{ always() && hashFiles('dist/release-metadata/release.json') != '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts summary
+  jsr:
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'publish-jsr' }}
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GH_TOKEN: ${{ github.token }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      STAGING_ATTEMPT: ${{ inputs.staging_attempt }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm install --global npm@11.19.0
+      - run: deno run --config deno.local.json -A scripts/release-ci.ts preflight
+      - run: deno run --config deno.local.json -A scripts/release-ci.ts restore launcher
+      - name: Require the matching npm launcher to be public
+        run: deno run --config deno.local.json -A scripts/release-ci.ts verify-public
+      - run: deno check --frozen packages/launcher/cli.ts packages/launcher/mod.ts
+      - run: deno publish --dry-run
+      - name: Publish JSR through OIDC
+        if: ${{ !inputs.dry_run }}
+        run: deno publish

@@ -1,0 +1,129 @@
+name: Publish binaries
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Reviewed full commit SHA; abort if main has moved
+        required: true
+        type: string
+      phase:
+        description: Stage npm packages or finalize after local npm approval
+        type: choice
+        required: true
+        default: stage
+        options: [stage, finalize]
+      build_run_id:
+        description: Successful same-commit build run (required for new staging)
+        type: string
+      staging_run_id:
+        description: Prior staging run to resume or finalize (leave empty for a new release)
+        type: string
+      staging_attempt:
+        description: Attempt of the prior staging run
+        type: string
+        default: "1"
+      dry_run:
+        description: Prepare and validate only; do not stage or publish
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: publish-binaries
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'stage' }}
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      STAGING_ATTEMPT: ${{ inputs.staging_attempt }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm install --global npm@11.19.0
+      - name: Verify release commit and ordinary CI
+        run: deno run --config deno.local.json -A scripts/release-ci.ts preflight
+      - name: Verify native build
+        if: ${{ inputs.staging_run_id == '' }}
+        run: deno run --config deno.local.json -A scripts/verify-build-run.ts "$BUILD_RUN_ID"
+      - name: Download native artifacts in CI
+        if: ${{ inputs.staging_run_id == '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: native-*
+          path: artifacts
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Assemble a new release
+        if: ${{ inputs.staging_run_id == '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts prepare binaries
+      - name: Restore exact packages for a retry
+        if: ${{ inputs.staging_run_id != '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts restore binaries restage
+      - name: Save exact packages before staging
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-binaries-${{ github.run_attempt }}
+          path: dist/release-bundle/
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+      - name: Stage npm packages through OIDC
+        run: deno run --config deno.local.json -A scripts/publish-binaries.ts
+      - name: Save receipts even after partial staging
+        if: ${{ always() && hashFiles('dist/release-metadata/release.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-metadata-binaries-${{ github.run_attempt }}
+          path: dist/release-metadata/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report stages
+        if: ${{ always() && hashFiles('dist/release-metadata/release.json') != '' }}
+        run: deno run --config deno.local.json -A scripts/release-ci.ts summary
+  finalize:
+    if: ${{ github.ref == 'refs/heads/main' && github.sha == inputs.expected_sha && inputs.phase == 'finalize' }}
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      STAGING_ATTEMPT: ${{ inputs.staging_attempt }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm install --global npm@11.19.0
+      - run: deno run --config deno.local.json -A scripts/release-ci.ts preflight
+      - run: deno run --config deno.local.json -A scripts/release-ci.ts restore binaries
+      - name: Verify npm approval and create the GitHub Release
+        run: deno run --config deno.local.json -A scripts/release-ci.ts finalize

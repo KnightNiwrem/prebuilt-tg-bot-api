@@ -1,8 +1,16 @@
 {
+  "workspace": ["./packages/launcher"],
   "tasks": {
-    "dev": "deno run --watch --allow-net main.ts"
+    "check": "deno check --config deno.local.json packages/launcher/cli.ts packages/launcher/mod.ts scripts/*.ts",
+    "test": "deno test --config deno.local.json -A packages/launcher scripts && node --test packages/binaries/meta/*_test.js && node scripts/build-npm.mjs && node --test scripts/node-launcher-test.mjs",
+    "verify": "deno fmt --check && deno lint --config deno.local.json && deno task check && deno task test",
+    "dev": "deno run --config deno.local.json -A packages/launcher/cli.ts",
+    "versions": "deno run --allow-read scripts/check-versions.ts",
+    "release": "deno run --config deno.local.json --allow-read --allow-write --allow-env --allow-run=git,gh,npm,npm.exe,node --allow-net=registry.npmjs.org scripts/release-control.ts"
   },
-  "imports": {
-    "@std/assert": "jsr:@std/assert@1"
-  }
+  "fmt": {
+    "exclude": ["prompt.md", "dist", "artifacts", "upstream", "node_modules"]
+  },
+  "lint": { "exclude": ["dist", "artifacts", "upstream", "node_modules"] },
+  "exclude": ["dist", "artifacts", "upstream", "node_modules"]
 }

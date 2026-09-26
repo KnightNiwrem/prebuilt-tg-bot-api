@@ -1,0 +1,34 @@
+name: Watch upstream
+on:
+  schedule:
+    - cron: "31 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.6
+      - id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: deno run -A scripts/upstream-watch.ts
+      - if: steps.upstream.outputs.changed == 'true'
+        run: deno fmt && deno task verify
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        if: steps.upstream.outputs.changed == 'true'
+        with:
+          branch: automation/upstream-bot-api
+          commit-message: "chore: pin Bot API ${{ steps.upstream.outputs.version }}"
+          title: "Update Bot API to ${{ steps.upstream.outputs.version }}"
+          body: |
+            Pins the new upstream release commit and exact npm versions, and advances the launcher patch to adopt it.
+
+            Review the upstream changes and run the native build matrix. Stage npm packages through OIDC, approve them locally with 2FA, and finalize the GitHub Release. Refresh deno.lock in CI before staging the launcher; approve npm before separately dispatching JSR publication. See RELEASING.md. PRs created with GITHUB_TOKEN need a manual CI dispatch.
