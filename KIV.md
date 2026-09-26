@@ -7,9 +7,13 @@ limitations belong in the [README](README.md).
 
 ## First public release
 
-- [ ] Provision the npm and JSR namespaces, package entries, and publishing
-      access described in
+- [x] Bootstrap npm package entries and configure staging-only trusted
+      publishers, the GitHub release environment, and the JSR repository link
+      described in
       [first-time maintainer setup](RELEASING.md#first-time-maintainer-setup).
+- [ ] Exercise the OIDC staging/approval flow on `main`. Private npm 2FA and JSR
+      scope restrictions are maintainer-reported; the public/API audit cannot
+      independently verify those settings.
 - [ ] Publish the native packages, resolve and commit the public npm integrity
       records in `deno.lock`, and publish the launcher to JSR and npm using the
       release procedure. Then remove the pending-publication notes from both

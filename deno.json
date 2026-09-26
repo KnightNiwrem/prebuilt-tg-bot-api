@@ -5,7 +5,8 @@
     "test": "deno test --config deno.local.json -A packages/launcher scripts && node --test packages/binaries/meta/*_test.js && node scripts/build-npm.mjs && node --test scripts/node-launcher-test.mjs",
     "verify": "deno fmt --check && deno lint --config deno.local.json && deno task check && deno task test",
     "dev": "deno run --config deno.local.json -A packages/launcher/cli.ts",
-    "versions": "deno run --allow-read scripts/check-versions.ts"
+    "versions": "deno run --allow-read scripts/check-versions.ts",
+    "release": "deno run --config deno.local.json --allow-read --allow-write --allow-env --allow-run=git,gh,npm,node --allow-net=registry.npmjs.org scripts/release-control.ts"
   },
   "fmt": {
     "exclude": ["prompt.md", "dist", "artifacts", "upstream", "node_modules"]

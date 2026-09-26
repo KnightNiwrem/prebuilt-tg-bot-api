@@ -88,11 +88,18 @@ static server. Deno may download both Linux variants for its CPU. No
 
 ## Release safety
 
-Public publishing is manual and separate from builds. A binary publication must
-refer to a successful same-commit build run. All platforms publish before the
-meta-package; npm integrity checks permit safe retry after partial publication.
-The launcher release validates the real public lockfile. Pre-publication tests
-use temporary local tarball registries and never commit their lockfiles.
+Public publishing requires maintainer approval and is separate from builds.
+GitHub OIDC may only stage npm packages; the maintainer approves selected stages
+locally with 2FA without downloading native payloads. A binary release requires
+successful ordinary CI and a same-commit native build/smoke run. Saved tarballs
+and receipts support exact-byte retries. All platforms become public before the
+meta-package, and GitHub Release finalization verifies their public integrities.
+The public lockfile is refreshed in CI. npm launcher approval precedes a
+separate JSR dispatch gated by the protected release environment. No reusable
+registry tokens are passed to jobs. JSR trusts the linked repository more
+broadly than npm's workflow/environment binding, so workflow review remains
+necessary. Pre-publication tests use temporary registries and never commit their
+lockfiles.
 
 No native artifact, including a Deno executable, is built on a developer machine
 as part of this repository's workflow. Local tests use trivial scripts for the

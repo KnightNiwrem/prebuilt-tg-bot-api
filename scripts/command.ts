@@ -3,11 +3,10 @@ import { dirname, join } from "node:path";
 let windowsNpm: string | undefined;
 
 /** CI helper; run npm's JavaScript entrypoint directly on Windows, without a shell. */
-export async function command(
+async function invocation(
   program: string,
   args: string[],
-  options: Deno.CommandOptions = {},
-): Promise<string> {
+): Promise<{ executable: string; argv: string[] }> {
   let executable = program;
   let argv = args;
   if (program === "npm" && Deno.build.os === "windows") {
@@ -29,6 +28,15 @@ export async function command(
     executable = "node";
     argv = [windowsNpm, ...args];
   }
+  return { executable, argv };
+}
+
+export async function command(
+  program: string,
+  args: string[],
+  options: Deno.CommandOptions = {},
+): Promise<string> {
+  const { executable, argv } = await invocation(program, args);
   const result = await new Deno.Command(executable, {
     ...options,
     args: argv,
@@ -40,4 +48,22 @@ export async function command(
     throw new Error(`${program} ${args[0]} failed (${result.code}): ${output}`);
   }
   return output;
+}
+
+/** Preserve npm's interactive browser/OTP authentication on the maintainer's CLI. */
+export async function interactiveCommand(
+  program: string,
+  args: string[],
+): Promise<void> {
+  const { executable, argv } = await invocation(program, args);
+  const process = new Deno.Command(executable, {
+    args: argv,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  }).spawn();
+  const status = await process.status;
+  if (!status.success) {
+    throw new Error(`${program} ${args[0]} failed (${status.code})`);
+  }
 }

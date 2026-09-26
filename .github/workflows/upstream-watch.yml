@@ -29,4 +29,4 @@ jobs:
           body: |
             Pins the new upstream release commit and exact npm versions, and advances the launcher patch to adopt it.
 
-            Review the upstream changes, run the native build matrix, publish the binary packages, and refresh deno.lock from the public registry before releasing the launcher. See RELEASING.md. PRs created with GITHUB_TOKEN need a manual CI dispatch.
+            Review the upstream changes and run the native build matrix. Stage npm packages through OIDC, approve them locally with 2FA, and finalize the GitHub Release. Refresh deno.lock in CI before staging the launcher; approve npm before separately dispatching JSR publication. See RELEASING.md. PRs created with GITHUB_TOKEN need a manual CI dispatch.
