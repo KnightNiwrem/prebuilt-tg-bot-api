@@ -3,8 +3,8 @@ import { nativeJob } from "./verify-reuse.ts";
 
 Deno.test("native reuse rejects workflow defaults that can change build execution", () => {
   const workflow =
-    "name: Build\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps: []\n  smoke:\n    steps: []\n";
-  assert.match(nativeJob(workflow), /runs-on/);
+    "name: Build\njobs:\n  build:\n    if: inputs.native_run_id == ''\n    runs-on: ubuntu-24.04\n    steps: []\n  smoke:\n    runs-on: other-runner\n    steps: []\n";
+  assert.equal(nativeJob(workflow), "    runs-on: ubuntu-24.04\n    steps: []");
   for (
     const globals of [
       "env:\n  CFLAGS: changed\n",

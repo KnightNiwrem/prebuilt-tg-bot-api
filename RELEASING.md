@@ -167,10 +167,12 @@ the public lockfile is added.
 
 For a rehearsal in CI, manually dispatch the workflow with `dry_run=true` and
 `expected_sha` set to the reviewed full commit SHA. All release/lockfile
-dispatches carry this SHA; jobs refuse to run if `main` moved after the local
-preflight. The local task supplies it automatically. This prepares/checks
-packages remotely but never stages, approves, or publishes. Local `--dry-run`
-does not dispatch even that rehearsal.
+dispatches carry this SHA; jobs reject a run whose recorded commit differs from
+it. This catches `main` moving between local preflight and dispatch. Later
+changes to `main` do not change or cancel an already dispatched run. The local
+task supplies the SHA automatically. A rehearsal prepares/checks packages
+remotely but never stages, approves, or publishes. Local `--dry-run` does not
+dispatch even that rehearsal.
 
 ### Recovery and retention
 

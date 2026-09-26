@@ -30,10 +30,10 @@ export async function checkVersions(root = "."): Promise<void> {
       ),
     `Launcher source is missing the expected import: ${specifier}`,
   );
-  assert.equal(
-    typeof (await read("deno.local.json")).imports?.[specifier],
-    "string",
-    `Local import map is missing the expected pin: ${specifier}`,
+  const target = (await read("deno.local.json")).imports?.[specifier];
+  assert.ok(
+    typeof target === "string" && target.trim().length > 0,
+    `Local import map needs a non-empty target for ${specifier}`,
   );
   console.log(`Binary packages and launcher pin agree: ${pin.version}`);
 }

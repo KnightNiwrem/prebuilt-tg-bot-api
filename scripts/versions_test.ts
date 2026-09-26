@@ -141,3 +141,24 @@ Deno.test("a mid-bump write failure rolls back already updated files", async () 
     await Deno.remove(root, { recursive: true });
   }
 });
+
+Deno.test("empty local import targets fail validation before a version bump writes", async () => {
+  for (const target of ["", "   "]) {
+    const root = await bumpFixture();
+    try {
+      const path = join(root, "deno.local.json");
+      const config = JSON.parse(await Deno.readTextFile(path));
+      config.imports[Object.keys(config.imports)[0]] = target;
+      await Deno.writeTextFile(path, JSON.stringify(config));
+      const before = await snapshot(root);
+      await assert.rejects(() => checkVersions(root), /non-empty/);
+      await assert.rejects(
+        () => bump("b".repeat(40), "10.4.0", null, root),
+        /non-empty/,
+      );
+      assert.deepEqual(await snapshot(root), before);
+    } finally {
+      await Deno.remove(root, { recursive: true });
+    }
+  }
+});

@@ -9,10 +9,11 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** Follow npm.cmd's PATH/prefix selection without passing user arguments to cmd.exe. */
+/** Select npm's CLI on Windows using the permitted Node on PATH, without cmd.exe. */
 export async function windowsNpmInvocation(
   args: string[],
   paths = (Deno.env.get("PATH") ?? "").split(";"),
+  cwd?: Deno.CommandOptions["cwd"],
 ): Promise<{ executable: string; argv: string[] }> {
   for (const entry of paths) {
     if (!entry) continue;
@@ -27,8 +28,9 @@ export async function windowsNpmInvocation(
         `Unsupported npm.cmd shim in ${directory}; use an npm installation with its JavaScript entrypoint`,
       );
     }
-    const localNode = join(directory, "node.exe");
-    const executable = await exists(localNode) ? localNode : "node";
+    // The release task grants --allow-run=node for the runtime selected on PATH.
+    // A different node.exe beside npm.cmd may be outside that permission.
+    const executable = "node";
     const prefixScript = join(
       directory,
       "node_modules",
@@ -38,6 +40,7 @@ export async function windowsNpmInvocation(
     );
     if (await exists(prefixScript)) {
       const result = await new Deno.Command(executable, {
+        cwd,
         args: [prefixScript],
         stdout: "piped",
         stderr: "inherit",
@@ -58,9 +61,10 @@ export async function windowsNpmInvocation(
 async function invocation(
   program: string,
   args: string[],
+  cwd?: Deno.CommandOptions["cwd"],
 ): Promise<{ executable: string; argv: string[] }> {
   if (program === "npm" && Deno.build.os === "windows") {
-    return await windowsNpmInvocation(args);
+    return await windowsNpmInvocation(args, undefined, cwd);
   }
   return { executable: program, argv: args };
 }
@@ -70,7 +74,7 @@ export async function command(
   args: string[],
   options: Deno.CommandOptions = {},
 ): Promise<string> {
-  const { executable, argv } = await invocation(program, args);
+  const { executable, argv } = await invocation(program, args, options.cwd);
   const result = await new Deno.Command(executable, {
     ...options,
     args: argv,

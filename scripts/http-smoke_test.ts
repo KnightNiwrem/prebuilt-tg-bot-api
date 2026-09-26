@@ -29,8 +29,11 @@ Deno.test("HTTP smoke rejects an unrelated HTTP response and shuts down the fixt
           stopped = true;
         },
       };
-    })
-  );
+    }), {
+    name: "AssertionError",
+    actual: { wrong: "server" },
+    expected: { ok: false, error_code: 404, description: "Not Found" },
+  });
   assert.ok(stopped);
 });
 
