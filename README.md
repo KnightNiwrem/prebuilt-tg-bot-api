@@ -72,9 +72,10 @@ readiness timeout leaves shutdown to the caller; always use `finally`.
 
 The API does not install signal handlers, so your application keeps its own
 SIGINT/SIGTERM behavior. Call `stop()` from your shutdown path. If your
-application exits without doing so, the server is sent SIGTERM and finishes
-shutting down by itself. `pid` is `undefined` only if the process could not be
-started.
+application exits without doing so, Linux/macOS send the server SIGTERM so it
+can finish shutting down by itself. Windows maps this request to forced
+termination and cannot provide the same graceful-shutdown guarantee. `pid` is
+`undefined` only if the process could not be started.
 
 ## Supported platforms
 

@@ -42,6 +42,15 @@ const relayed = [
 const consoleEvents = ["SIGINT", "SIGBREAK"] as const;
 const consoleGraceMs = 5_000;
 
+/** Node timers overflow to 1ms above this range. Validate before signalling. */
+export function validateTimeout(value: number): void {
+  if (!Number.isFinite(value) || value < 0 || value > 2_147_483_647) {
+    throw new RangeError(
+      "timeouts must be finite numbers between 0 and 2147483647ms",
+    );
+  }
+}
+
 /** Shared lifecycle; use each runtime's native process and signal primitives. */
 export function spawnServer(
   args: readonly string[],
@@ -112,6 +121,7 @@ export function spawnServer(
     );
   }
   let settled = false;
+  let quitSent = false;
   let shutdown: Promise<void> | undefined;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   const signalChild = (signal: Signal) => {
@@ -120,6 +130,9 @@ export function spawnServer(
       // Windows has no deliverable termination signals; both runtimes map
       // SIGKILL to TerminateProcess.
       kill(windows ? "SIGKILL" : signal);
+      if (["SIGINT", "SIGTERM", "SIGQUIT", "SIGKILL"].includes(signal)) {
+        quitSent = true;
+      }
     } catch (error) {
       // The child can exit between checking its status and sending the signal.
       if (
@@ -134,6 +147,7 @@ export function spawnServer(
     // shut down by itself; terminate it only if it outlives the grace period.
     for (const signal of consoleEvents) {
       listeners.push([signal, () => {
+        quitSent = true; // The console has already delivered the quit event.
         forceTimer ??= setTimeout(() => signalChild("SIGKILL"), consoleGraceMs);
       }]);
     }
@@ -148,7 +162,9 @@ export function spawnServer(
   }
   // If the host exits first, ask the server to shut down gracefully by itself.
   // Deno.exit() fires only "unload", not Node's "exit" event.
-  const onExit = () => signalChild("SIGTERM");
+  const onExit = () => {
+    if (!quitSent) signalChild("SIGTERM");
+  };
   if (deno) globalThis.addEventListener("unload", onExit);
   else process.on("exit", onExit);
   const exited = wait.catch((error: Error) => {
@@ -171,17 +187,17 @@ export function spawnServer(
     child: { pid },
     exited,
     stop(timeoutMs = 5_000) {
-      if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
-        return Promise.reject(
-          new RangeError("stop timeout must be a non-negative finite number"),
-        );
+      try {
+        validateTimeout(timeoutMs);
+      } catch (error) {
+        return Promise.reject(error);
       }
       return shutdown ??= (async () => {
         if (settled) {
           await exited;
           return;
         }
-        signalChild("SIGTERM");
+        if (!quitSent) signalChild("SIGTERM");
         const timer = setTimeout(() => signalChild("SIGKILL"), timeoutMs);
         try {
           await exited;

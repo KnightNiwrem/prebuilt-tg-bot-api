@@ -1,5 +1,9 @@
-import { createConnection } from "node:net";
-import { type RunningProcess, spawnServer } from "./process.ts";
+import { createConnection, isIP } from "node:net";
+import {
+  type RunningProcess,
+  spawnServer,
+  validateTimeout,
+} from "./process.ts";
 
 /** Programmatic options. The CLI itself never parses or builds server flags. */
 export interface BotApiOptions {
@@ -50,22 +54,31 @@ function probe(
   host: string,
   port: number,
   signal: AbortSignal,
+  timeoutMs: number,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     if (signal.aborted) return resolve(false);
     const socket = createConnection({ host, port });
     const finish = (ready: boolean) => {
+      clearTimeout(timer);
       signal.removeEventListener("abort", abort);
       socket.destroy();
       resolve(ready);
     };
     const abort = () => finish(false);
     signal.addEventListener("abort", abort, { once: true });
-    socket.setTimeout(250);
+    // Cover DNS/connect as well as an idle socket, and cap each attempt by the
+    // caller's remaining deadline rather than adding a fixed 250ms overrun.
+    const timer = setTimeout(() => finish(false), timeoutMs);
     socket.once("connect", () => finish(true));
     socket.once("error", () => finish(false));
-    socket.once("timeout", () => finish(false));
   });
+}
+
+export function readinessHost(host = "127.0.0.1"): string {
+  if (isIP(host) === 4 && host === "0.0.0.0") return "127.0.0.1";
+  if (isIP(host) === 6 && /^[0:.]+$/.test(host.split("%")[0])) return "::1";
+  return host;
 }
 
 /**
@@ -80,6 +93,7 @@ export function startBotApiServer(options: BotApiOptions): BotApiServer {
 export function createServer(
   options: BotApiOptions,
   launch: (args: readonly string[]) => RunningProcess,
+  connect: typeof probe = probe,
 ): BotApiServer {
   const port = options.port ?? 8081;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -91,9 +105,7 @@ export function createServer(
       options.stopTimeoutMs ?? 5_000,
     ]
   ) {
-    if (!Number.isFinite(value) || value < 0) {
-      throw new RangeError("timeouts must be non-negative finite numbers");
-    }
+    validateTimeout(value);
   }
   const running = launch(argumentsFor(options));
   const controller = new AbortController();
@@ -113,22 +125,30 @@ export function createServer(
     ready() {
       return readiness ??= (async () => {
         const timeout = options.readyTimeoutMs ?? 30_000;
-        const deadline = Date.now() + timeout;
-        const host = options.host === "0.0.0.0"
-          ? "127.0.0.1"
-          : options.host === "::"
-          ? "::1"
-          : options.host ?? "127.0.0.1";
-        while (Date.now() < deadline) {
+        const deadline = performance.now() + timeout;
+        const host = readinessHost(options.host);
+        while (performance.now() < deadline) {
           if (exitError) throw exitError;
           if (controller.signal.aborted) {
             throw new Error("Telegram Bot API stopped before readiness");
           }
-          if (await probe(host, port, controller.signal)) {
+          const remaining = Math.max(0, deadline - performance.now());
+          if (
+            await connect(
+              host,
+              port,
+              controller.signal,
+              Math.min(250, remaining),
+            )
+          ) {
             if (exitError) throw exitError;
-            return;
+            if (performance.now() < deadline) return;
+            break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 25));
+          const delay = Math.min(25, deadline - performance.now());
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
         }
         if (exitError) throw exitError;
         throw new Error(

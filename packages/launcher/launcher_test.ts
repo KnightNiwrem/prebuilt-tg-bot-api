@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { argumentsFor, createServer } from "./src/api.ts";
+import { argumentsFor, createServer, readinessHost } from "./src/api.ts";
 import { spawnServer } from "./src/process.ts";
 import { resolveBinary } from "./src/binary.ts";
 import type * as Source from "./src/api.ts";
@@ -214,15 +214,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         stdout: "piped",
         stderr: "inherit",
       }).spawn();
-      const reader = child.stdout.getReader();
+      const output = lineReader(child.stdout);
       try {
-        const output = await reader.read();
-        assert.match(new TextDecoder().decode(output.value), /ready/);
+        assert.equal(await output.next(), "ready");
         child.kill(signal);
-        assert.equal((await child.status).code, 42);
+        assert.equal((await statusWithin(child)).code, 42);
       } finally {
-        await reader.cancel();
-        reader.releaseLock();
+        await output.cancel();
         try {
           child.kill("SIGKILL");
         } catch { /* Already exited. */ }
@@ -326,6 +324,10 @@ Deno.test({
       assert.equal(await output.next(), "graceful SIGINT");
       assert.equal((await statusWithin(launcher)).code, 0);
     } finally {
+      if (!server) {
+        killQuietly(launcher.pid, "SIGTERM");
+        await statusWithin(launcher, 500).catch(() => {});
+      }
       killQuietly(-launcher.pid);
       killQuietly(server);
       await output.cancel();
@@ -334,7 +336,7 @@ Deno.test({
   },
 });
 
-function host(port: number, mode: "run" | "exit") {
+function host(port: number, mode: "run" | "exit" | "stop-exit") {
   return new Deno.Command(Deno.execPath(), {
     cwd: root,
     args: [
@@ -385,8 +387,88 @@ Deno.test({
       // The orphaned server still writes to the inherited pipe.
       assert.equal(await output.next(), "SIGTERM received");
     } finally {
+      killQuietly(app.pid);
       killQuietly(server);
       await output.cancel();
+      await app.status;
+    }
+  },
+});
+
+Deno.test("readiness maps all unspecified IPv6 spellings to loopback", () => {
+  assert.equal(readinessHost(), "127.0.0.1");
+  assert.equal(readinessHost("0.0.0.0"), "127.0.0.1");
+  for (
+    const host of ["::", "::0", "0:0:0:0:0:0:0:0", "0000::0000", "::0.0.0.0"]
+  ) assert.equal(readinessHost(host), "::1");
+  for (const host of ["127.0.0.2", "::1", "2001:db8::1", "localhost"]) {
+    assert.equal(readinessHost(host), host);
+  }
+});
+
+Deno.test("readiness caps a probe at the remaining deadline", async () => {
+  let finish!: (code: number) => void;
+  let seenTimeout = 0;
+  const exited = new Promise<number>((resolve) => finish = resolve);
+  const server = createServer(
+    { apiId: 1, apiHash: "test", readyTimeoutMs: 10 },
+    () => ({
+      child: { pid: 123 },
+      exited,
+      stop: () => {
+        finish(0);
+        return Promise.resolve();
+      },
+    }),
+    async (_host, _port, _signal, timeout) => {
+      seenTimeout = timeout;
+      await new Promise((resolve) => setTimeout(resolve, timeout + 1));
+      return false;
+    },
+  );
+  try {
+    await assert.rejects(server.ready(), /within 10ms/);
+    assert.ok(
+      seenTimeout > 0 && seenTimeout <= 10,
+      `probe timeout: ${seenTimeout}`,
+    );
+  } finally {
+    await server.stop();
+  }
+});
+
+Deno.test("oversized timeouts are rejected before spawning", () => {
+  for (const key of ["readyTimeoutMs", "stopTimeoutMs"]) {
+    assert.throws(
+      () =>
+        createServer(
+          { apiId: 1, apiHash: "test", [key]: 2_147_483_648 },
+          () => {
+            throw new Error("must not spawn");
+          },
+        ),
+      /2147483647/,
+    );
+  }
+});
+
+Deno.test({
+  name: "host exit during stop does not send a second quit signal",
+  ignore: Deno.build.os === "windows",
+  async fn() {
+    const app = host(unusedPort(), "stop-exit");
+    const output = lineReader(app.stdout);
+    let server: number | undefined;
+    try {
+      server = JSON.parse(await output.next()).pid;
+      assert.equal((await statusWithin(app)).code, 0);
+      assert.equal(await output.next(), "SIGTERM received");
+      assert.equal(await output.next(), "shutdown complete");
+    } finally {
+      killQuietly(app.pid);
+      killQuietly(server);
+      await output.cancel();
+      await app.status;
     }
   },
 });

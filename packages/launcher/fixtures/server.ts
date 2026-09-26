@@ -9,8 +9,18 @@ if (args.includes("--never-listen")) {
     () => new Response("mock"),
   );
   if (Deno.build.os !== "windows") {
+    let termCount = 0;
     Deno.addSignalListener("SIGTERM", () => {
+      termCount++;
       if (args.includes("--report-term")) console.log("SIGTERM received");
+      if (args.includes("--slow-term")) {
+        if (termCount > 1) Deno.exit(99);
+        setTimeout(() => {
+          console.log("shutdown complete");
+          void server.shutdown();
+        }, 100);
+        return;
+      }
       if (!args.includes("--ignore-term")) void server.shutdown();
     });
   }

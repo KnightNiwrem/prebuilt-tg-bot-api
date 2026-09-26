@@ -35,7 +35,7 @@ export function detectLibc() {
     return "glibc";
   }
   throw new Error(
-    "Cannot determine Linux libc. Set TELEGRAM_BOT_API_BINARY to a compatible executable.",
+    "Cannot determine Linux libc. When using the launcher, set TELEGRAM_BOT_API_BINARY to a compatible executable.",
   );
 }
 
@@ -54,7 +54,7 @@ export function targetFor(platform, arch, libc) {
   throw new Error(
     `Unsupported Telegram Bot API target: ${platform}-${arch}${
       libc ? `-${libc}` : ""
-    }. Set TELEGRAM_BOT_API_BINARY to a custom build.`,
+    }. When using the launcher, set TELEGRAM_BOT_API_BINARY to a custom build.`,
   );
 }
 
@@ -96,7 +96,7 @@ export function resolveBinaryPath() {
   throw new Error(
     `Cannot resolve ${
       names.join(" or ")
-    }. Install optional dependencies (do not use --omit=optional), or set TELEGRAM_BOT_API_BINARY.`,
+    }. Install optional dependencies (do not use --omit=optional), or, when using the launcher, set TELEGRAM_BOT_API_BINARY.`,
     {
       cause: failures.length === 1 ? failures[0] : new AggregateError(failures),
     },

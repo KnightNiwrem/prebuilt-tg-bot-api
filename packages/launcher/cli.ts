@@ -7,7 +7,7 @@ import { spawnServer } from "./src/process.ts";
 
 function isMain(): boolean {
   if (typeof import.meta.main === "boolean") return import.meta.main;
-  // Node before 24.2 lacks import.meta.main; npm's bin shim links to this file.
+  // Fallback for Node versions without import.meta.main; npm's shim links here.
   try {
     return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
   } catch {

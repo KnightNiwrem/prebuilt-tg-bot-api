@@ -83,16 +83,27 @@ test("Node CLI delivers terminal Ctrl+C to the server once", {
   // A terminal signals its whole foreground process group; model that group.
   const child = launch([
     "-e",
-    'process.on("SIGINT",()=>{console.log("graceful");setTimeout(()=>process.exit(0),100)});console.log(process.pid);setInterval(()=>{},1000)',
+    'let signals=0;process.on("SIGINT",()=>{signals++;if(signals===1)setTimeout(()=>{console.log("signals "+signals);process.exit(signals===1?0:99)},100)});console.log(process.pid);setInterval(()=>{},1000)',
   ], { detached: true });
   let server;
+  let output = "";
+  child.stdout.on("data", (chunk) => output += chunk);
   try {
     server = Number(String((await once(child.stdout, "data"))[0]).trim());
     const group = execFileSync("ps", ["-o", "pgid=", "-p", String(server)]);
     assert.notEqual(Number(String(group).trim()), child.pid);
     process.kill(-child.pid, "SIGINT");
     assert.equal((await once(child, "close"))[0], 0);
+    assert.match(output, /\nsignals 1\n$/);
   } finally {
+    // Let the launcher relay a quit signal if its child PID was never reported.
+    if (!server && child.exitCode === null) {
+      child.kill("SIGTERM");
+      await Promise.race([
+        once(child, "close"),
+        new Promise((resolve) => setTimeout(resolve, 300)),
+      ]);
+    }
     for (const pid of [-child.pid, server]) {
       try {
         if (pid) process.kill(pid, "SIGKILL");
