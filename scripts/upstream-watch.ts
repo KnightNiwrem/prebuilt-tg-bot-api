@@ -5,7 +5,14 @@ import { command } from "./command.ts";
 const pin = JSON.parse(await Deno.readTextFile("upstream.json"));
 const api = async (path: string) =>
   JSON.parse(await command("gh", ["api", `repos/${pin.repository}/${path}`]));
-const tags = await api("tags?per_page=100") as Array<
+const tags = JSON.parse(
+  await command("gh", [
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${pin.repository}/tags?per_page=100`,
+  ]),
+).flat() as Array<
   { name: string; commit: { sha: string } }
 >;
 const releases = tags.filter((tag) => /^v?\d+\.\d+(?:\.\d+)?$/.test(tag.name));

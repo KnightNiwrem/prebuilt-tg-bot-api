@@ -20,8 +20,10 @@ jobs:
     if: inputs.native_run_id != ''
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
           deno-version: v2.9.6
       - env:
@@ -35,17 +37,18 @@ jobs:
         target: [linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: native-${{ matrix.target }}
           path: dist
           run-id: ${{ inputs.native_run_id }}
           github-token: ${{ github.token }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
+          retention-days: 14
   build:
     if: inputs.native_run_id == ''
     timeout-minutes: 120
@@ -66,13 +69,16 @@ jobs:
             runner: windows-latest
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Read upstream pin
         id: pin
         shell: bash
         run: echo "ref=$(node -p 'require("./upstream.json").ref')" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           repository: tdlib/telegram-bot-api
           ref: ${{ steps.pin.outputs.ref }}
           submodules: recursive
@@ -93,9 +99,9 @@ jobs:
         shell: bash
         run: |
           file dist/telegram-bot-api*
-          dist/telegram-bot-api --help > dist/help.txt 2>&1
-          grep -i 'telegram-bot-api' dist/help.txt
-      - uses: actions/upload-artifact@v4
+          dist/telegram-bot-api --help > "$RUNNER_TEMP/bot-api-help.txt" 2>&1
+          grep -i 'telegram-bot-api' "$RUNNER_TEMP/bot-api-help.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-${{ matrix.target }}
           path: dist/*

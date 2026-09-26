@@ -1,34 +1,68 @@
-import { dirname, join } from "node:path";
+import { join, resolve } from "node:path";
 
-let windowsNpm: string | undefined;
+async function exists(path: string): Promise<boolean> {
+  try {
+    return (await Deno.stat(path)).isFile;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
+  }
+}
+
+/** Follow npm.cmd's PATH/prefix selection without passing user arguments to cmd.exe. */
+export async function windowsNpmInvocation(
+  args: string[],
+  paths = (Deno.env.get("PATH") ?? "").split(";"),
+): Promise<{ executable: string; argv: string[] }> {
+  for (const entry of paths) {
+    if (!entry) continue;
+    const directory = resolve(entry.replace(/^"|"$/g, ""));
+    // Version-manager native shims (for example Volta) can execute directly.
+    const exe = join(directory, "npm.exe");
+    if (await exists(exe)) return { executable: exe, argv: args };
+    if (!await exists(join(directory, "npm.cmd"))) continue;
+    let cli = join(directory, "node_modules", "npm", "bin", "npm-cli.js");
+    if (!await exists(cli)) {
+      throw new Error(
+        `Unsupported npm.cmd shim in ${directory}; use an npm installation with its JavaScript entrypoint`,
+      );
+    }
+    const localNode = join(directory, "node.exe");
+    const executable = await exists(localNode) ? localNode : "node";
+    const prefixScript = join(
+      directory,
+      "node_modules",
+      "npm",
+      "bin",
+      "npm-prefix.js",
+    );
+    if (await exists(prefixScript)) {
+      const result = await new Deno.Command(executable, {
+        args: [prefixScript],
+        stdout: "piped",
+        stderr: "inherit",
+      }).output();
+      if (!result.success) {
+        throw new Error("Cannot resolve npm's configured global prefix");
+      }
+      const prefix = new TextDecoder().decode(result.stdout).trim();
+      const upgraded = join(prefix, "node_modules", "npm", "bin", "npm-cli.js");
+      if (prefix && await exists(upgraded)) cli = upgraded;
+    }
+    return { executable, argv: [cli, ...args] };
+  }
+  throw new Error("Cannot locate npm on PATH");
+}
 
 /** CI helper; run npm's JavaScript entrypoint directly on Windows, without a shell. */
 async function invocation(
   program: string,
   args: string[],
 ): Promise<{ executable: string; argv: string[] }> {
-  let executable = program;
-  let argv = args;
   if (program === "npm" && Deno.build.os === "windows") {
-    if (!windowsNpm) {
-      const node = await new Deno.Command("node", {
-        args: ["-p", "process.execPath"],
-        stdout: "piped",
-      }).output();
-      if (!node.success) throw new Error("Cannot locate the Node installation");
-      windowsNpm = join(
-        dirname(new TextDecoder().decode(node.stdout).trim()),
-        "node_modules",
-        "npm",
-        "bin",
-        "npm-cli.js",
-      );
-      await Deno.stat(windowsNpm);
-    }
-    executable = "node";
-    argv = [windowsNpm, ...args];
+    return await windowsNpmInvocation(args);
   }
-  return { executable, argv };
+  return { executable: program, argv: args };
 }
 
 export async function command(

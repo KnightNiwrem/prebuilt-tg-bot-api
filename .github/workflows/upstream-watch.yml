@@ -10,8 +10,8 @@ jobs:
   watch:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
           deno-version: v2.9.6
       - id: upstream
@@ -20,7 +20,7 @@ jobs:
         run: deno run -A scripts/upstream-watch.ts
       - if: steps.upstream.outputs.changed == 'true'
         run: deno fmt && deno task verify
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         if: steps.upstream.outputs.changed == 'true'
         with:
           branch: automation/upstream-bot-api
