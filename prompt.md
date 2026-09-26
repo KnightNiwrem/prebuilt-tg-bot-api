@@ -100,7 +100,7 @@ Adjust names if you have a strong reason, but keep the three-layer separation.
 ### CI responsibilities
 
 - `build-binaries.yml` builds `telegram-bot-api` from a **pinned upstream commit**, recording the release tag when available, for every target in the table. Prefer **fully static** builds (musl-static on Linux; static OpenSSL and zlib everywhere) so binaries have zero runtime dependencies. Use native arm64 runners where available; otherwise cross-compile (zig/clang or `cross`) — pick whichever makes the matrix simplest and most reliable.
-- macOS: ad-hoc `codesign` the binaries in CI so Gatekeeper doesn't quarantine them; document `xattr -d com.apple.quarantine` as a fallback.
+- macOS: ad-hoc `codesign` the binaries in CI and verify the signature. Ad-hoc signing does not clear Gatekeeper quarantine on downloaded files; document `xattr -d com.apple.quarantine` for trusted downloads.
 - Windows: verify upstream actually builds on windows-latest. If it doesn't within reasonable effort, drop `win32-x64` from the matrix and make the launcher error clearly on Windows rather than shipping something broken. Record the decision in the ADR.
 - Keep `ci.yml` for formatting, linting, type checks, tests, version consistency, and JSR package validation against unpublished dependency fixtures. Keep `build-binaries.yml` and `smoke.yml` for native builds, all-platform smoke tests, and standalone launcher compilation. These workflows already validate packages using temporary local registries and do not need public npm/JSR publication or publishing credentials.
 - After the matrix succeeds, retain downloadable native artifacts and standalone launchers. The current build produces five native artifacts; each static Linux binary supplies both the glibc and musl package for its CPU. Smoke jobs already assemble and test the seven platform packages. Native build artifacts currently expire after 14 days; document the download window and preserve the exact artifacts used for a release.
@@ -163,7 +163,7 @@ You **may** run locally: `deno fmt`, lint/type checks/tests using `deno.local.js
 
 ## Verification required before declaring done
 
-- Confirm against **current** Deno documentation/source that Deno's npm resolver skips `optionalDependencies` whose `os`/`cpu`/`libc` don't match the host, and record the finding in the README. If `libc` is not honoured, detect musl vs glibc at runtime in the meta-package and document that installs on Alpine may fetch one extra package.
+- Confirmed for Deno 2.9.6/2.9.7: npm optional dependencies are filtered by OS/CPU but not `libc`; runtime libc detection and the possible extra Linux package download are documented and implemented. Recheck this finding when upgrading Deno rather than reimplementing detection.
 - Confirm in CI (one job per target, not locally) that `deno compile --target <triple>` embeds the correct platform package and the resulting executable starts the server.
 - Per-platform smoke-test job: run the launcher with `--help` (or `--version`), assert exit code and that stdout is upstream's help text. Where API credentials are available as secrets, a deeper job starts the server with `--local`, requests `GET http://127.0.0.1:<port>/bot000:placeholder/getMe`, and asserts a response arrives (an HTTP 401/404 from the server counts as success — it proves the process is up and serving).
 
