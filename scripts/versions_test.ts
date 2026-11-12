@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { bump, validatePin } from "./bump-upstream.ts";
 import { checkVersions } from "./check-versions.ts";
-import { validateVersionAdvance } from "./versions.ts";
+import { validateVersionAdvance, versionParts } from "./versions.ts";
 import { targets } from "./targets.ts";
 import { dirname, join } from "node:path";
 
@@ -53,14 +53,21 @@ const bumpFiles = [
     `packages/binaries/${target}/package.json`
   ),
 ];
-async function bumpFixture(): Promise<string> {
+async function bumpFixture() {
   const root = await Deno.makeTempDir({ prefix: "bot-api-bump-" });
   for (const file of bumpFiles) {
     const destination = join(root, file);
     await Deno.mkdir(dirname(destination), { recursive: true });
     await Deno.copyFile(file, destination);
   }
-  return root;
+  const pin = JSON.parse(await Deno.readTextFile(join(root, "upstream.json")));
+  const [major, minor] = versionParts(pin.version).base;
+  // The watcher runs these tests after updating the checkout's upstream pin.
+  return {
+    root,
+    version: `${major}.${minor + 1n}.0`,
+    tag: `v${major}.${minor + 1n}`,
+  };
 }
 async function snapshot(root: string): Promise<string[]> {
   return await Promise.all(
@@ -70,7 +77,7 @@ async function snapshot(root: string): Promise<string[]> {
 
 Deno.test("a missing source pin or local mapping leaves every bump file untouched", async () => {
   for (const file of ["packages/launcher/src/binary.ts", "deno.local.json"]) {
-    const root = await bumpFixture();
+    const { root, version, tag } = await bumpFixture();
     try {
       const path = join(root, file);
       await Deno.writeTextFile(
@@ -81,7 +88,7 @@ Deno.test("a missing source pin or local mapping leaves every bump file untouche
         ),
       );
       const before = await snapshot(root);
-      await assert.rejects(() => bump("b".repeat(40), "10.4.0", "v10.4", root));
+      await assert.rejects(() => bump("b".repeat(40), version, tag, root));
       assert.deepEqual(await snapshot(root), before);
     } finally {
       await Deno.remove(root, { recursive: true });
@@ -90,35 +97,35 @@ Deno.test("a missing source pin or local mapping leaves every bump file untouche
 });
 
 Deno.test("a bump preserves the local mapping and validates even the no-op path", async () => {
-  const root = await bumpFixture();
+  const { root, version, tag } = await bumpFixture();
   try {
     const path = join(root, "deno.local.json");
     const config = JSON.parse(await Deno.readTextFile(path));
     const oldSpecifier = Object.keys(config.imports)[0];
     config.imports[oldSpecifier] = "./custom-fixture.js";
     await Deno.writeTextFile(path, JSON.stringify(config));
-    await bump("b".repeat(40), "10.4.0", "v10.4", root);
+    await bump("b".repeat(40), version, tag, root);
     await checkVersions(root);
     assert.equal(
       JSON.parse(await Deno.readTextFile(path))
-        .imports["npm:@deerdaily/bot-api-binaries@10.4.0"],
+        .imports[`npm:@deerdaily/bot-api-binaries@${version}`],
       "./custom-fixture.js",
     );
     const once = await snapshot(root);
-    await bump("b".repeat(40), "10.4.0", "v10.4", root);
+    await bump("b".repeat(40), version, tag, root);
     assert.deepEqual(await snapshot(root), once);
     const metaPath = join(root, "packages/binaries/meta/package.json");
     const meta = JSON.parse(await Deno.readTextFile(metaPath));
     meta.version = "9.0.0";
     await Deno.writeTextFile(metaPath, JSON.stringify(meta));
-    await assert.rejects(() => bump("b".repeat(40), "10.4.0", "v10.4", root));
+    await assert.rejects(() => bump("b".repeat(40), version, tag, root));
   } finally {
     await Deno.remove(root, { recursive: true });
   }
 });
 
 Deno.test("a mid-bump write failure rolls back already updated files", async () => {
-  const root = await bumpFixture();
+  const { root, version } = await bumpFixture();
   const before = await snapshot(root);
   const write = Deno.writeTextFile;
   let failed = false;
@@ -131,7 +138,7 @@ Deno.test("a mid-bump write failure rolls back already updated files", async () 
       await write(path, data, options);
     };
     await assert.rejects(
-      () => bump("b".repeat(40), "10.4.0", null, root),
+      () => bump("b".repeat(40), version, null, root),
       /Version bump failed/,
     );
     assert.ok(failed);
@@ -144,7 +151,7 @@ Deno.test("a mid-bump write failure rolls back already updated files", async () 
 
 Deno.test("empty local import targets fail validation before a version bump writes", async () => {
   for (const target of ["", "   "]) {
-    const root = await bumpFixture();
+    const { root, version } = await bumpFixture();
     try {
       const path = join(root, "deno.local.json");
       const config = JSON.parse(await Deno.readTextFile(path));
@@ -153,7 +160,7 @@ Deno.test("empty local import targets fail validation before a version bump writ
       const before = await snapshot(root);
       await assert.rejects(() => checkVersions(root), /non-empty/);
       await assert.rejects(
-        () => bump("b".repeat(40), "10.4.0", null, root),
+        () => bump("b".repeat(40), version, null, root),
         /non-empty/,
       );
       assert.deepEqual(await snapshot(root), before);
