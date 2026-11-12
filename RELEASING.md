@@ -59,7 +59,7 @@ JavaScript dependency fixtures; these checks work before functional packages are
 public. They do not replace native smoke tests or the public lockfile check.
 Optional `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` secrets add credentialed
 `getMe` coverage; the basic HTTP smoke test always runs. Allow Actions to create
-PRs for the upstream watcher.
+PRs if you use the manual upstream watcher.
 
 References: [npm staged publishing](https://docs.npmjs.com/staged-publishing/),
 [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/),
@@ -74,10 +74,12 @@ a published version. The launcher is versioned separately in
 `packages/launcher/deno.json` and published to JSR and npm at the same launcher
 version. A launcher-only fix must leave `src/binary.ts`'s binary pin unchanged.
 
-For a new upstream release, the scheduled watcher opens a PR. It prefers numeric
-upstream tags. Upstream has no tags at bootstrap, so the documented fallback is
-the immutable commit updating `project(TelegramBotApi VERSION ...)`. The watcher
-does not silently rebuild the same release after unrelated master commits.
+Scheduled upstream checks are disabled. To check for a new upstream release,
+manually dispatch `upstream-watch.yml`; it opens a PR when Actions is allowed to
+create pull requests. It prefers numeric upstream tags. Upstream has no tags at
+bootstrap, so the documented fallback is the immutable commit updating
+`project(TelegramBotApi VERSION ...)`. The watcher does not silently rebuild the
+same release after unrelated master commits.
 
 To perform a manual upstream bump or rebuild:
 
