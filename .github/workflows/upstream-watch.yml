@@ -1,7 +1,5 @@
 name: Watch upstream
 on:
-  schedule:
-    - cron: "31 6 * * *"
   workflow_dispatch:
 permissions:
   contents: write
